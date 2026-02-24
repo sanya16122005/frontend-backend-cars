@@ -2,70 +2,78 @@ const express = require('express');
 const app = express();
 const port = 3000;
 
-// Наш список автомобилей (товаров)
-let cars = [
-  { id: 1, name: 'BMW M3', price: 5500000 },
-  { id: 2, name: 'Audi RS6', price: 7200000 },
-  { id: 3, name: 'Lada Vesta Sport', price: 1400000 },
-];
-
-// Middleware для парсинга JSON
 app.use(express.json());
+
+// Собственное middleware — логируем каждый запрос
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
+// Начальные данные автомобилей: id, название, стоимость
+let cars = [
+  { id: 1, name: 'Toyota Camry',   price: 2500000 },
+  { id: 2, name: 'BMW X5',         price: 6800000 },
+  { id: 3, name: 'Tesla Model 3',  price: 4200000 },
+  { id: 4, name: 'Ford Mustang',   price: 3900000 },
+  { id: 5, name: 'Volkswagen Golf',price: 1800000 },
+];
 
 // Главная страница
 app.get('/', (req, res) => {
-  res.send('API автомобилей');
+  res.send('Cars API работает!');
 });
 
-// CREATE: добавление нового авто
-app.post('/cars', (req, res) => {
-  const { name, price } = req.body;
-
-  const newCar = {
-    id: Date.now(),
-    name,
-    price,
-  };
-
-  cars.push(newCar);
-  res.status(201).json(newCar);
-});
-
-// READ: список всех авто
+// GET /cars — все автомобили
 app.get('/cars', (req, res) => {
   res.json(cars);
 });
 
-// READ: одно авто по id
+// GET /cars/:id — один автомобиль
 app.get('/cars/:id', (req, res) => {
-  const car = cars.find(c => c.id == req.params.id);
-  if (!car) {
-    return res.status(404).send('Car not found');
-  }
+  const id = Number(req.params.id);
+  const car = cars.find(c => c.id === id);
+  if (!car) return res.status(404).json({ error: 'Car not found' });
   res.json(car);
 });
 
-// UPDATE: частичное обновление авто
-app.patch('/cars/:id', (req, res) => {
-  const car = cars.find(c => c.id == req.params.id);
-  if (!car) {
-    return res.status(404).send('Car not found');
+// POST /cars — создать автомобиль
+app.post('/cars', (req, res) => {
+  const { name, price } = req.body;
+  if (!name || price === undefined) {
+    return res.status(400).json({ error: 'name и price обязательны' });
   }
+  const newCar = {
+    id: Date.now(),
+    name,
+    price: Number(price),
+  };
+  cars.push(newCar);
+  res.status(201).json(newCar);
+});
+
+// PATCH /cars/:id — обновить автомобиль
+app.patch('/cars/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const car = cars.find(c => c.id === id);
+  if (!car) return res.status(404).json({ error: 'Car not found' });
 
   const { name, price } = req.body;
   if (name !== undefined) car.name = name;
-  if (price !== undefined) car.price = price;
+  if (price !== undefined) car.price = Number(price);
 
   res.json(car);
 });
 
-// DELETE: удаление авто по id
+// DELETE /cars/:id — удалить автомобиль
 app.delete('/cars/:id', (req, res) => {
-  cars = cars.filter(c => c.id != req.params.id);
+  const id = Number(req.params.id);
+  const exists = cars.some(c => c.id === id);
+  if (!exists) return res.status(404).json({ error: 'Car not found' });
+  cars = cars.filter(c => c.id !== id);
   res.send('Ok');
 });
 
-// Запуск сервера
 app.listen(port, () => {
   console.log(`Сервер запущен на http://localhost:${port}`);
 });

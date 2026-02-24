@@ -1,0 +1,85 @@
+// ===== ПЕРЕМЕННЫЕ =====
+$primary: #3498db;
+$danger:  #e74c3c;
+$success: #2ecc71;
+$bg:      #0b0f19;
+$text:    #e7eaf3;
+$theme:   dark;
+
+// ===== МИКСИН кнопки =====
+@mixin button($color) {
+  display: inline-block;
+  padding: 10px 18px;
+  background: $color;
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  &:hover {
+    background: darken($color, 10%);
+  }
+}
+
+// ===== МИКСИН карточки =====
+@mixin card($radius: 12px) {
+  border-radius: $radius;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 16px;
+  max-width: 400px;
+}
+
+// ===== BODY: условие тёмной темы =====
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 24px;
+
+  @if $theme == dark {
+    background: $bg;
+    color: $text;
+  } @else {
+    background: #ffffff;
+    color: #222222;
+  }
+}
+
+// ===== КАРТОЧКА с вложенностью =====
+.card {
+  @include card(14px);
+
+  &__title {
+    margin: 0 0 8px;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  &__desc {
+    margin: 0 0 16px;
+    opacity: 0.8;
+    font-size: 14px;
+  }
+
+  // Модификаторы через & — вложенность
+  &--accent   { border-color: $primary; }
+  &--sport    { border-color: $danger;  }
+  &--electric { border-color: $success; }
+}
+
+// ===== КНОПКА =====
+.btn {
+  @include button($primary);
+}
+
+// ===== ЦИКЛ @each — генерация цветовых меток =====
+$car-types: "sedan", "suv", "sport", "electric", "crossover";
+
+@each $type in $car-types {
+  .badge--#{$type} {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-right: 4px;
+  }
+}
