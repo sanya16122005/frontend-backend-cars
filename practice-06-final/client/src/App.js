@@ -1,0 +1,11 @@
+import CarsPage from './pages/CarsPage/CarsPage';
+
+function App() {
+  return (
+    <div className="App">
+      <CarsPage />
+    </div>
+  );
+}
+
+export default App;
