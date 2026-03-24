@@ -1,0 +1,136 @@
+$bg: #0b0f19;
+$border: rgba(255, 255, 255, 0.10);
+$text: #e7eaf3;
+$primary: rgba(99, 102, 241, 0.55);
+$primaryBg: rgba(99, 102, 241, 0.18);
+
+.authPage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $bg;
+  color: $text;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial;
+  padding: 16px;
+}
+
+.authCard {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 16px;
+  border: 1px solid $border;
+  background: #0f1526;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+  }
+
+  &__logo { font-size: 2.5rem; }
+
+  &__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  &__sub {
+    opacity: 0.6;
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  &__foot {
+    text-align: center;
+    font-size: 0.88rem;
+    opacity: 0.75;
+    margin: 0;
+
+    a {
+      color: #a5b4fc;
+      text-decoration: none;
+      &:hover { text-decoration: underline; }
+    }
+  }
+}
+
+.authAlert {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.authBtn {
+  width: 100%;
+  padding: 11px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  opacity: 0.95;
+  color: $text;
+}
+
+.input {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: $text;
+  outline: none;
+  font-size: 14px;
+  transition: border-color 0.2s;
+
+  &:focus {
+    border-color: rgba(99, 102, 241, 0.6);
+  }
+
+  option {
+    background: #0f1526;
+    color: $text;
+  }
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: $text;
+  cursor: pointer;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.2s;
+
+  &:hover { opacity: 0.8; }
+  &--primary { background: $primaryBg; border-color: $primary; }
+  &--danger  { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.45); }
+}
