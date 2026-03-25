@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🚗</text></svg>">
+  <title>🚗 Задачи — Автомобили</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <h1 class="brand">🚗 Список задач</h1>
+      <span id="status" class="status"></span>
+    </header>
+
+    <main class="main">
+      <form id="note-form" class="form">
+        <input
+          id="note-input"
+          class="input"
+          type="text"
+          placeholder="Введите задачу..."
+          required
+        />
+        <button type="submit" class="btn btn--primary">+ Добавить</button>
+      </form>
+
+      <ul id="notes-list" class="list"></ul>
+      <p id="empty" class="empty" style="display:none">Задач пока нет</p>
+    </main>
+
+    <footer class="footer">
+      <p>🚗 Cars Tasks — работает офлайн</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
