@@ -1,0 +1,51 @@
+:root {
+  --bg: #0b0f19;
+  --text: #e7eaf3;
+  --muted: rgba(231,234,243,0.55);
+  --border: rgba(255,255,255,0.10);
+  --accent: #818cf8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial;
+}
+.page { max-width: 900px; margin: 0 auto; padding: 24px 16px; min-height: 100vh; display: flex; flex-direction: column; }
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 24px;
+}
+.brand { font-size: 1.3rem; font-weight: 700; }
+.nav { display: flex; gap: 8px; }
+.nav__link {
+  padding: 8px 14px; border-radius: 10px;
+  color: var(--text); text-decoration: none;
+  border: 1px solid transparent;
+}
+.nav__link:hover { background: rgba(255,255,255,0.04); }
+.nav__link.active { background: rgba(129,140,248,0.18); border-color: rgba(129,140,248,0.55); }
+
+.main { flex: 1; }
+.main h2 { margin-bottom: 14px; }
+.main p, .main li { color: var(--muted); margin-bottom: 6px; }
+.main strong { color: var(--text); }
+.main ul { padding-left: 22px; margin-top: 10px; }
+.main code { background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+
+.search {
+  width: 100%; padding: 10px 14px; margin-bottom: 16px;
+  border-radius: 10px; border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04); color: var(--text);
+}
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.card { padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); }
+.card__title { font-size: 1rem; margin-bottom: 6px; }
+.card__year, .card__price { color: var(--muted); font-size: 14px; }
+.card__price { color: var(--text); font-weight: 600; margin-top: 4px; }
+
+.loader { padding: 24px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; }
+.empty  { padding: 24px; text-align: center; color: var(--muted); }
+
+.footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center; font-size: 13px; opacity: 0.5; }

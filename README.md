@@ -1,4 +1,4 @@
-# 🚗 Frontend & Backend — Cars (Практики 1–12)
+# 🚗 Frontend & Backend — Cars (Практики 1–25)
 
 Репозиторий с практическими заданиями по дисциплине **«Фронтенд и бэкенд разработка»**  
 Институт ИПТИП, кафедра Индустриального программирования, 4 семестр 2025/2026.  
@@ -24,6 +24,19 @@
 | `practice-10-frontend-auth` | React + Express + axios interceptors | Фронтенд с аутентификацией, хранение токенов |
 | `practice-11-rbac` | React + Express + RBAC | Система ролей: user / seller / admin |
 | `practice-12-final` | **Единый итоговый проект КР2** | React + Express + JWT + RBAC + Swagger + Sass |
+| `practice-13-service-worker` | PWA / Service Worker | Cache First, офлайн-страница, регистрация SW |
+| `practice-14-manifest` | PWA / Web App Manifest | Иконки, тема, установка на главный экран |
+| `practice-15-app-shell` | HTTPS + App Shell | mkcert, динамическая загрузка контента, два кэша |
+| `practice-16-websocket-push` | Socket.IO + Web Push | События в реальном времени + VAPID push |
+| `practice-17-push-reminders` | Запланированные напоминания | setTimeout на сервере + snooze в SW |
+| `practice-18-kr3-final` | **Финальный отчёт КР3** | Сводный README по PWA-стеку |
+| `practice-19-postgres` | Express + pg + PostgreSQL | CRUD `Car`, индексы, валидация |
+| `practice-20-mongodb` | Express + mongoose + MongoDB | CRUD `Car` + агрегация средней цены |
+| `practice-21-redis-cache` | RBAC + Redis | Кэш с TTL и инвалидацией для GET-маршрутов |
+| `practice-22-load-balancing` | Nginx + HAProxy | Round Robin, max_fails, backup |
+| `practice-23-docker` | Docker Compose | Стек cars-backend × 3 + Nginx |
+| `practice-24-kr4-final` | **Финальный отчёт КР4** | Сводный README по серверному стеку |
+| `practice-25-vite` | Vite + React.lazy + visualizer | Code splitting, ручные чанки, bundle report |
 
 ---
 
@@ -909,4 +922,99 @@ cd practice-06-final/client && npm install && npm start
 # КР2 — практика 12
 cd practice-12-final/server && npm install && npm start
 cd practice-12-final/client && npm install && npm start
+```
+
+---
+
+# 🟣 КР3 (практики 13–17) — PWA «Авто-задачи»
+
+| Папка | Что внутри | Результат |
+|---|---|---|
+| `practice-13-service-worker` | Service Worker, Cache First | Офлайн-страница, кэширование статики |
+| `practice-14-manifest` | PWA-манифест, иконки | Установка на главный экран |
+| `practice-15-app-shell` | App Shell + HTTPS (mkcert) | Каркас кэшируется, контент `/content/*` грузится Network First |
+| `practice-16-websocket-push` | Socket.IO + web-push + VAPID | Уведомления в реальном времени и системные push |
+| `practice-17-push-reminders` | Запланированные напоминания + snooze | Push приходит по таймеру, кнопка «Отложить на 5 минут» |
+| `practice-18-kr3-final` | **Финальный README КР3** | Итог по всему блоку PWA |
+
+## ✅ Практика 13 — Service Worker (Cache First)
+PWA-каркас, кэш `car-notes-v2`, офлайн-режим, регистрация SW из `app.js`.
+
+## ✅ Практика 14 — Web App Manifest
+Иконки 16/32/192/512, цвет темы `#0b0f19`, установка приложения через браузер.
+
+## ✅ Практика 15 — HTTPS + App Shell
+Архитектура App Shell: `index.html` — каркас, `content/home.html` и `content/about.html` подгружаются динамически через `fetch`. Два кэша: `car-shell-v1` (Cache First для статики) и `car-dynamic-v1` (Network First для контента, фолбек на `home.html`). HTTPS через `mkcert` + `http-server --ssl`.
+
+## ✅ Практика 16 — WebSocket + Push
+Express + Socket.IO + web-push. События `newCarTask` → `carTaskAdded` рассылаются всем вкладкам, push-уведомления через VAPID-ключи приходят даже при закрытом окне. Кнопки «Включить / Отключить уведомления» в футере.
+
+## ✅ Практика 17 — Детализация Push (напоминания)
+Форма «Задача с напоминанием» (текст + datetime-local). Сервер планирует push через `setTimeout`, хранит активные таймеры в `Map<id, {timeoutId, …}>`. В уведомлении кнопка `⏸ Отложить на 5 минут` — Service Worker ловит `notificationclick` и шлёт `POST /snooze?reminderId=…`.
+
+## ✅ Практика 18 — Сборка КР3
+Сводный отчёт `practice-18-kr3-final/README.md` с топологией и чек-листом проверки всего PWA-стека.
+
+---
+
+# 🟠 КР4 (практики 19–23) — Серверная инфраструктура
+
+| Папка | Что внутри | Результат |
+|---|---|---|
+| `practice-19-postgres` | Express + pg + PostgreSQL | CRUD `Car` (brand/model/year/price/vin), индексы, валидация |
+| `practice-20-mongodb` | Express + mongoose + MongoDB | CRUD `Car` + агрегация `$avg` цены по бренду |
+| `practice-21-redis-cache` | RBAC + JWT + Redis | Кэш для `GET /api/cars` (10 мин) и `/api/users` (1 мин) + инвалидация |
+| `practice-22-load-balancing` | Nginx + HAProxy | 3 backend × Round Robin × max_fails/fail_timeout × backup |
+| `practice-23-docker` | Docker Compose | 3 backend-контейнера + Nginx, изолированная сеть `cars-net` |
+| `practice-24-kr4-final` | **Финальный README КР4** | Итог по всему серверному стеку |
+
+## ✅ Практика 19 — PostgreSQL
+Таблица `cars` с `SERIAL PK`, `CHECK`-ограничениями, индексами по `brand` и `year`. Все 5 CRUD-маршрутов через параметризованные запросы `pg.Pool`. Уникальность `vin` обрабатывается отдельно (код ошибки `23505` → 409).
+
+## ✅ Практика 20 — MongoDB
+Mongoose-схема `Car` с `timestamps: true`, индексами и `unique sparse` для VIN. Бонус: `GET /api/cars-stats/avg-price` через `Car.aggregate` с `$group` и `$avg`.
+
+## ✅ Практика 21 — Redis-кэш
+`cacheMiddleware(keyBuilder, ttl)` сначала смотрит в Redis, иначе передаёт управление дальше и сохраняет ответ через `saveToCache`. Ответ всегда `{ source: 'cache' | 'server', data }` — видно, откуда пришли данные. При `POST/PUT/DELETE` вызываются `invalidateUsersCache` / `invalidateCarsCache`.
+
+## ✅ Практика 22 — Балансировка Nginx + HAProxy
+Три identical backend-инстанса на портах 3001/3002/3003. Nginx (`upstream` + `max_fails=2 fail_timeout=30s` + `backup`) на 8080, HAProxy (`option httpchk GET /health`) на 8090. Скрипты `start-backends.ps1` / `start-backends.sh`.
+
+## ✅ Практика 23 — Docker Compose
+`Dockerfile` на `node:18-alpine` с раздельным `COPY package*.json` для кэширования слоёв. `docker-compose.yml` поднимает три backend-сервиса и Nginx, наружу торчит только `8080:80`. Балансировка идёт по DNS-именам сервисов (`cars-backend-1`, `cars-backend-2`, `cars-backend-3`).
+
+## ✅ Практика 24 — Сборка КР4
+Сводный отчёт `practice-24-kr4-final/README.md`: общая архитектура, маршрут запроса от клиента до БД, чек-лист готовности.
+
+---
+
+# 🟢 Практика 25 — Инструменты сборки (Vite + Lazy Loading)
+
+`practice-25-vite/` — React-приложение «Cars Catalog» с настроенным Vite. Главная страница в основном бандле, `Catalog` и `About` — отдельные чанки через `React.lazy + Suspense`. Ручные чанки `react-vendor` и `router` в `vite.config.js`. Анализатор `rollup-plugin-visualizer` генерирует `dist/bundle-report.html`.
+
+```bash
+cd practice-25-vite
+npm install
+npm run dev          # http://localhost:5173
+npm run build        # production-сборка + bundle-report.html
+```
+
+---
+
+## 🚀 Быстрый старт КР3 / КР4 / практика 25
+
+```bash
+# КР3 — самое полное приложение (WebSocket + push + напоминания)
+cd practice-17-push-reminders
+npm install
+npx web-push generate-vapid-keys     # вставить ключи в server.js
+npm start                            # http://localhost:3001
+
+# КР4 — поднять весь стек в Docker
+cd practice-23-docker
+docker compose up --build            # http://localhost:8080
+
+# Практика 25 — React-каталог с lazy loading
+cd practice-25-vite
+npm install && npm run dev           # http://localhost:5173
 ```
