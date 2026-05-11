@@ -1,0 +1,25 @@
+{
+  "name": "Cars Tasks — App Shell",
+  "short_name": "Авто-задачи",
+  "description": "Список задач по автомобилям, PWA с архитектурой App Shell",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/icons/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

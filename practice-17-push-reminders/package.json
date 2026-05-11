@@ -1,0 +1,17 @@
+{
+  "name": "practice-17-push-reminders",
+  "version": "1.0.0",
+  "description": "Cars tasks with scheduled push reminders and snooze action",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "vapid": "web-push generate-vapid-keys"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "web-push": "^3.6.7"
+  }
+}

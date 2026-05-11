@@ -1,0 +1,17 @@
+{
+  "name": "practice-16-websocket-push",
+  "version": "1.0.0",
+  "description": "WebSocket (Socket.IO) + Web Push notifications for cars tasks PWA",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "vapid": "web-push generate-vapid-keys"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "web-push": "^3.6.7"
+  }
+}

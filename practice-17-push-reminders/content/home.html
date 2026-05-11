@@ -1,0 +1,20 @@
+<section class="home-content">
+  <h2 class="section-title">Добавить задачу по автомобилю</h2>
+  <form id="note-form" class="form">
+    <input id="note-input" class="input" type="text" placeholder="Например: проверить давление в шинах" required />
+    <button type="submit" class="btn btn--primary">+ Добавить</button>
+  </form>
+
+  <h2 class="section-title">Задача с напоминанием</h2>
+  <form id="reminder-form" class="form form--column">
+    <input id="reminder-text" class="input" type="text" placeholder="Например: ТО Audi A4 через час" required />
+    <div class="form-row">
+      <input id="reminder-time" class="input" type="datetime-local" required />
+      <button type="submit" class="btn btn--success">⏰ Запланировать</button>
+    </div>
+  </form>
+
+  <h2 class="section-title">Список задач</h2>
+  <ul id="notes-list" class="list"></ul>
+  <p id="empty" class="empty" style="display:none">Задач пока нет</p>
+</section>
