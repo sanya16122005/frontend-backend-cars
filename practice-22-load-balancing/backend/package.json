@@ -1,0 +1,12 @@
+{
+  "name": "cars-backend-instance",
+  "version": "1.0.0",
+  "description": "Identical cars backend instance for load balancing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
