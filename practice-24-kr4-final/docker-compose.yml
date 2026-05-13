@@ -23,9 +23,12 @@ services:
       timeout: 3s
       retries: 10
 
-  # Одноразовая инициализация БД (создание таблиц + seed)
+  # Одноразовая инициализация БД (создание таблиц + seed).
+  # Этот сервис ЕДИНСТВЕННЫЙ собирает образ — остальные backend-сервисы
+  # переиспользуют image: cars-backend:latest, чтобы не пересобирать 4 раза.
   init-db:
     build: ./backend
+    image: cars-backend:latest
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,7 +43,7 @@ services:
     restart: "no"
 
   cars-backend-1:
-    build: ./backend
+    image: cars-backend:latest
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
@@ -61,7 +64,7 @@ services:
     networks: [cars-net]
 
   cars-backend-2:
-    build: ./backend
+    image: cars-backend:latest
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
@@ -82,7 +85,7 @@ services:
     networks: [cars-net]
 
   cars-backend-3:
-    build: ./backend
+    image: cars-backend:latest
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
