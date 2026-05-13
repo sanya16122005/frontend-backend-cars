@@ -3,14 +3,34 @@ const { pool } = require('../db');
 const { cacheGet, cacheSet, cacheDel } = require('../redis');
 const { authMiddleware, roleMiddleware } = require('../auth');
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Users
+ *     description: Управление пользователями (только admin)
+ */
 const router = express.Router();
-const TTL = 60;   // 1 минута
+const TTL = 60;
 
 const SAFE_FIELDS = 'id, email, first_name, last_name, role, blocked, created_at';
 
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Список пользователей (кэш 1 минута, только admin)
+ *     tags: [Users]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Список
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/CachedListResponse' }
+ *       403: { description: Forbidden }
+ */
 router.get('/',
-  authMiddleware,
-  roleMiddleware(['admin']),
+  authMiddleware, roleMiddleware(['admin']),
   async (req, res) => {
     const key = 'users:all';
     const cached = await cacheGet(key);
@@ -22,9 +42,24 @@ router.get('/',
   }
 );
 
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   get:
+ *     summary: Пользователь по id (кэш 1 минута)
+ *     tags: [Users]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Найден }
+ *       404: { description: Не найден }
+ */
 router.get('/:id',
-  authMiddleware,
-  roleMiddleware(['admin']),
+  authMiddleware, roleMiddleware(['admin']),
   async (req, res) => {
     const key = `users:${req.params.id}`;
     const cached = await cacheGet(key);
@@ -37,9 +72,19 @@ router.get('/:id',
   }
 );
 
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   put:
+ *     summary: Обновить пользователя (admin)
+ *     tags: [Users]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Обновлено }
+ *       404: { description: Не найден }
+ */
 router.put('/:id',
-  authMiddleware,
-  roleMiddleware(['admin']),
+  authMiddleware, roleMiddleware(['admin']),
   async (req, res) => {
     const fields = ['first_name', 'last_name', 'role', 'blocked'];
     const updates = [];
@@ -61,9 +106,19 @@ router.put('/:id',
   }
 );
 
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   delete:
+ *     summary: Заблокировать пользователя (мягкое удаление — blocked=true)
+ *     tags: [Users]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Заблокировано }
+ *       404: { description: Не найден }
+ */
 router.delete('/:id',
-  authMiddleware,
-  roleMiddleware(['admin']),
+  authMiddleware, roleMiddleware(['admin']),
   async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE users SET blocked = TRUE WHERE id = $1 RETURNING ${SAFE_FIELDS}`,

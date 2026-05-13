@@ -1,21 +1,28 @@
 const express = require('express');
 const cors    = require('cors');
+const http    = require('http');
 const os      = require('os');
+const swaggerUi = require('swagger-ui-express');
+const { Server: SocketIOServer } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 
 const { pool } = require('./db');
-const { connectRedis } = require('./redis');
+const { connectRedis, pubClient, subClient } = require('./redis');
+const swaggerSpec = require('./swagger');
+
 const authRoutes  = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 const carsRoutes  = require('./routes/cars');
+const pushRoutes  = require('./routes/push');
 
-const PORT      = Number(process.env.PORT)      || 3000;
-const SERVER_ID = process.env.SERVER_ID         || `cars-${os.hostname()}`;
+const PORT      = Number(process.env.PORT) || 3000;
+const SERVER_ID = process.env.SERVER_ID    || `cars-${os.hostname()}`;
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Кладём идентификатор инстанса в req — чтобы видеть, какой backend ответил
+// Идентификатор инстанса в req → попадает в ответы
 app.use((req, _res, next) => { req.serverId = SERVER_ID; next(); });
 
 // Логи
@@ -26,28 +33,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health-check для балансировщика
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'Cars API (KR4 unified)'
+}));
+
+// Health-check для Nginx
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
-// Корень — отладка балансировки
+// Отладка балансировки
 app.get('/', (req, res) => {
   res.json({
     server: SERVER_ID,
     host: os.hostname(),
     port: PORT,
     message: '🚗 cars-backend (KR4 unified)',
-    endpoints: ['/api/auth/*', '/api/users/*', '/api/cars/*']
+    docs: '/api-docs',
+    endpoints: ['/api/auth/*', '/api/users/*', '/api/cars/*', '/api/push/*']
   });
 });
 
 app.use('/api/auth',  authRoutes);
 app.use('/api/users', usersRoutes);
-app.use('/api/cars',  carsRoutes);
+app.use('/api/cars',  carsRoutes(getIo));   // фабрика, чтобы внутрь попал io
+app.use('/api/push',  pushRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
-// Старт: ждём БД и Redis, потом слушаем
-async function waitForPg(retries = 20) {
+// ────────── Старт ──────────
+async function waitForPg(retries = 30) {
   for (let i = 0; i < retries; i++) {
     try { await pool.query('SELECT 1'); return; }
     catch { console.log(`[${SERVER_ID}] waiting for postgres… (${i+1}/${retries})`); await new Promise(r => setTimeout(r, 1500)); }
@@ -55,12 +69,30 @@ async function waitForPg(retries = 20) {
   throw new Error('Postgres unavailable');
 }
 
+let io;
+function getIo() { return io; }
+
 (async () => {
   try {
     await waitForPg();
     await connectRedis();
-    app.listen(PORT, '0.0.0.0', () =>
-      console.log(`✅ [${SERVER_ID}] cars-backend on http://0.0.0.0:${PORT}`)
+
+    const server = http.createServer(app);
+    io = new SocketIOServer(server, {
+      path: '/socket.io',
+      cors: { origin: '*' }
+    });
+
+    // Redis-адаптер — события распространяются между всеми тремя backend-инстансами
+    io.adapter(createAdapter(pubClient, subClient));
+
+    io.on('connection', (socket) => {
+      console.log(`[${SERVER_ID}] socket connected:`, socket.id);
+      socket.on('disconnect', () => console.log(`[${SERVER_ID}] socket disconnected:`, socket.id));
+    });
+
+    server.listen(PORT, '0.0.0.0', () =>
+      console.log(`✅ [${SERVER_ID}] cars-backend on http://0.0.0.0:${PORT} (docs: /api-docs)`)
     );
   } catch (e) {
     console.error('Startup error:', e.message);

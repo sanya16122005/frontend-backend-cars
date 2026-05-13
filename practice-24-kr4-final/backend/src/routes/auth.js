@@ -5,14 +5,43 @@ const { nanoid } = require('nanoid');
 const { pool } = require('../db');
 const { cacheDel } = require('../redis');
 const {
-  ACCESS_SECRET, REFRESH_SECRET,
+  REFRESH_SECRET,
   generateAccessToken, generateRefreshToken,
   authMiddleware
 } = require('../auth');
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Auth
+ *     description: Регистрация, вход, refresh, профиль
+ */
 const router = express.Router();
-const refreshTokens = new Set();   // в реальном приложении — Redis или БД
+const refreshTokens = new Set();
 
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Регистрация нового пользователя
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, first_name, last_name, password]
+ *             properties:
+ *               email:      { type: string, example: u@u }
+ *               first_name: { type: string, example: Иван }
+ *               last_name:  { type: string, example: Иванов }
+ *               password:   { type: string, example: secret }
+ *               role:       { type: string, enum: [user, seller, admin], default: user }
+ *     responses:
+ *       201: { description: Пользователь создан, $ref: '#/components/schemas/User' }
+ *       409: { description: Email уже существует }
+ */
 router.post('/register', async (req, res) => {
   const { email, first_name, last_name, password, role } = req.body || {};
   if (!email || !first_name || !last_name || !password) {
@@ -32,6 +61,26 @@ router.post('/register', async (req, res) => {
   res.status(201).json({ id, email, first_name, last_name, role: role || 'user' });
 });
 
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Вход — пара access + refresh токенов
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:    { type: string, example: admin@cars.local }
+ *               password: { type: string, example: admin123 }
+ *     responses:
+ *       200: { description: Пара токенов, $ref: '#/components/schemas/AuthTokens' }
+ *       401: { description: Неверные учётные данные }
+ */
 router.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
   const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -46,6 +95,16 @@ router.post('/login', async (req, res) => {
   res.json({ accessToken, refreshToken });
 });
 
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Обновить пару токенов по refreshToken
+ *     tags: [Auth]
+ *     responses:
+ *       200: { description: Новая пара токенов }
+ *       401: { description: refreshToken невалиден или истёк }
+ */
 router.post('/refresh', (req, res) => {
   const { refreshToken } = req.body || {};
   if (!refreshToken || !refreshTokens.has(refreshToken)) {
@@ -64,6 +123,17 @@ router.post('/refresh', (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/auth/me:
+ *   get:
+ *     summary: Текущий пользователь по accessToken
+ *     tags: [Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Профиль, $ref: '#/components/schemas/User' }
+ *       401: { description: Не авторизован }
+ */
 router.get('/me', authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
     'SELECT id, email, first_name, last_name, role, blocked FROM users WHERE id = $1',

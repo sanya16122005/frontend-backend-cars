@@ -1859,79 +1859,117 @@ docker compose down -v    # + удалить тома
 
 ---
 
-# ⭐ Практика 24 — Итоговый проект (КР4)
+# ⭐ Практика 24 — Итоговый проект (КР4) — объединение всех 4 КР
 
 ## Цель
-Объединить результаты практик 19–23 в **один Docker-стек** с авторизацией и ролевой моделью из практики 11:
-- PostgreSQL (19) как источник данных
-- Redis (21) как слой кэша поверх PG
-- RBAC (11) — три роли user/seller/admin, JWT access+refresh
-- Nginx (22) балансирует трафик между **тремя backend-инстансами**
-- Docker Compose (23) поднимает весь стек одной командой
-- `init-db` сервис автоматически создаёт таблицы и засевает данные
+Собрать в один работающий проект всё, что было сделано за курс:
+
+| КР | Что взято в `practice-24-kr4-final/` |
+|---|---|
+| **КР1** | React-клиент, тёмная тема на **Sass/SCSS**, **Swagger**-документация API (`/api-docs`), CRUD автомобилей |
+| **КР2** | **JWT** access+refresh, **RBAC** (`user`/`seller`/`admin`), axios interceptors с автообновлением токена, `PrivateRoute` с проверкой роли |
+| **КР3** | **PWA**: manifest + Service Worker + установка на устройство, **Socket.IO** для real-time toast'ов между вкладками, **Web Push** через VAPID |
+| **КР4** | **PostgreSQL** для данных, **Redis** для кэша GET и общего хранилища push-подписок, **Socket.IO Redis adapter** для синхронизации событий между инстансами, **Nginx** балансирует **3 backend-контейнера**, всё в **Docker Compose** |
+
+Поднимается **одной командой**: `docker compose up --build`.
 
 ## Структура
 ```text
 practice-24-kr4-final/
-├── backend/
+│
+├── frontend/                       # КР1+КР2+КР3 — React + Vite + Sass + PWA
+│   ├── Dockerfile                  # multi-stage: build → nginx со встроенной статикой
+│   ├── package.json
+│   ├── vite.config.js              # dev-proxy /api и /socket.io на backend
+│   ├── index.html                  # подключает manifest, иконки, тему
+│   ├── public/
+│   │   ├── manifest.json           # PWA-манифест
+│   │   ├── sw.js                   # Service Worker: Cache First + push handler
+│   │   └── icons/                  # 16/32/180/192/512
+│   └── src/
+│       ├── main.jsx                # регистрация SW + рендер App
+│       ├── App.jsx                 # роутер + header + Socket.IO listener
+│       ├── styles/{_variables,_mixins,main}.scss
+│       ├── api/client.js           # axios + interceptors (auto-refresh 401)
+│       ├── hooks/{useAuth,useToasts}.js
+│       ├── pages/{Login,Register,Cars,Users}Page.jsx
+│       └── components/{PrivateRoute,CarItem,CarModal,PushToggle}.jsx
+│
+├── backend/                        # КР1+КР2+КР3+КР4
 │   ├── Dockerfile                  # FROM node:18-alpine + кэш слоёв
-│   ├── .dockerignore
 │   ├── package.json
 │   └── src/
-│       ├── server.js               # Express, /, /health, монтаж роутов
+│       ├── server.js               # Express + Socket.IO + Redis adapter + Swagger
 │       ├── db.js                   # pg.Pool
-│       ├── redis.js                # createClient + cacheGet/cacheSet/cacheDel
-│       ├── init-db.js              # CREATE TABLE users/cars + seed
+│       ├── redis.js                # main + pub + sub clients, кэш + push-подписки
+│       ├── init-db.js              # CREATE TABLE users/cars + seed (admin + 5 авто)
 │       ├── auth.js                 # JWT access/refresh + middleware
+│       ├── push.js                 # web-push setVapidDetails + sendPushToAll
+│       ├── swagger.js              # OpenAPI 3.0 spec через swagger-jsdoc
 │       └── routes/
-│           ├── auth.js             # register, login, refresh, me
+│           ├── auth.js             # register, login, refresh, me + Swagger
 │           ├── users.js            # CRUD admin-only + Redis cache
-│           └── cars.js             # CRUD по RBAC-ролям + Redis cache
+│           ├── cars.js             # CRUD по RBAC + cache + io.emit + push
+│           └── push.js             # vapid-public-key, subscribe, unsubscribe
+│
 ├── nginx/
-│   └── nginx.conf                  # upstream → 3 backend, max_fails, backup
-└── docker-compose.yml              # postgres + redis + 3 backend + nginx + init-db
+│   └── nginx.conf                  # / → SPA, /api → backend, /socket.io → WS upgrade, /api-docs → Swagger
+│
+├── docker-compose.yml              # postgres + redis + init-db + 3 backend + frontend
+├── .env.example                    # VAPID_PUBLIC / VAPID_PRIVATE
+└── README.md
 ```
 
-## 🏗️ Архитектура стека
+## 🏗️ Архитектура
 
 ```
-                   client (browser / Postman)
-                          │
-                          ▼  http://localhost:8080
-                  ┌───────────────┐
-                  │ nginx:alpine  │     ← практика 22 (LB) + 23 (Docker)
-                  └──────┬────────┘
-                         │ Round Robin
-            ┌────────────┼────────────┐
-            ▼            ▼            ▼
-       ┌─────────┐ ┌─────────┐ ┌─────────┐
-       │ back-1  │ │ back-2  │ │ back-3  │   ← практика 11 (RBAC)
-       │  :3000  │ │  :3000  │ │  :3000  │     + 19 (PG) + 21 (Redis cache)
-       └────┬────┘ └────┬────┘ └────┬────┘
-            └───────────┼───────────┘
-                        │
-              ┌─────────┴─────────┐
-              ▼                   ▼
-         ┌──────────┐        ┌─────────┐
-         │ postgres │        │  redis  │
-         │   :5432  │        │  :6379  │
-         └──────────┘        └─────────┘
-                  ↑ pg-data (volume)
+                          🌐 client (browser)
+                                 │
+                                 ▼  http://localhost:8080
+                       ┌───────────────────┐
+                       │  nginx:alpine     │
+                       │  + React SPA      │  ← собранный фронт лежит внутри образа
+                       └────────┬──────────┘
+                                │
+            ┌───────────────────┼────────────────────┐
+            │                   │                    │
+   /api/* + /api-docs   /socket.io/* (WS)          /, /assets/*, /sw.js
+   (Round Robin)        (Redis pub/sub adapter)     (статика SPA)
+            │                   │
+            └─────┬─────────────┘
+                  ▼
+   ┌──────────────────────────────────────┐
+   │        upstream cars_backend         │
+   │  cars-backend-1 (active)             │
+   │  cars-backend-2 (active)             │
+   │  cars-backend-3 (backup)             │
+   └────────────┬─────────────────────────┘
+                │
+       ┌────────┴────────┐
+       ▼                 ▼
+  ┌─────────┐      ┌──────────────────────┐
+  │postgres │      │        redis         │
+  │  :5432  │      │  • cache cars/users  │
+  └─────────┘      │  • push:subscriptions│
+                   │  • socket.io adapter │
+                   └──────────────────────┘
 ```
-Только Nginx торчит наружу через `8080:80`. Остальное изолировано в bridge-сети `cars-net` и общается по DNS-именам сервисов.
+Снаружи доступен **только Nginx** через `8080:80`. PostgreSQL, Redis и backend-инстансы изолированы в bridge-сети `cars-net`.
 
 ## 🖥️ Сервер
 
 ### Что реализовано
 - `express.json()` + `cors`
 - Логирование всех запросов с указанием `SERVER_ID`
-- `authMiddleware` — проверка JWT access-токена в заголовке `Authorization: Bearer …`
+- `authMiddleware` — проверка JWT access-токена
 - `roleMiddleware(roles)` — проверка роли из payload токена
-- Полный CRUD автомобилей с ролевой защитой
-- Полный CRUD пользователей (только admin), мягкое удаление через `blocked = true`
-- Redis-кэш на GET-маршруты с автоматической инвалидацией при POST/PATCH/PUT/DELETE
-- `init-db` сервис создаёт таблицы и засевает 5 авто + admin (`admin@cars.local / admin123`)
-- Порядок старта через `depends_on: condition: service_healthy/completed_successfully`
+- Полный CRUD автомобилей и пользователей с RBAC
+- **Swagger UI** на `/api-docs` (`bearerAuth` схема, схемы `Car`/`User`/`AuthTokens`/`CachedListResponse`)
+- **Redis-кэш** на GET-маршруты с автоматической инвалидацией при изменениях
+- **Socket.IO** + **Redis-адаптер** — события `carCreated` / `carUpdated` / `carDeleted` рассылаются между всеми тремя инстансами
+- **web-push** — push-подписки хранятся в Redis (общие для всех инстансов), при создании авто рассылаются всем подписанным
+- `init-db` сервис создаёт таблицы и засевает 5 авто + admin
+- Порядок старта через `depends_on: condition: service_healthy / service_completed_successfully`
 
 ### Модель Car (таблица `cars`)
 | Поле | Тип | Описание |
@@ -1957,24 +1995,27 @@ practice-24-kr4-final/
 | blocked       | `BOOLEAN`                 | мягкое удаление |
 | created_at    | `TIMESTAMPTZ`             | создан |
 
-### API эндпоинты
-| Метод | Путь | Роль | Описание | Статус |
-|---|---|---|---|---|
-| POST   | /api/auth/register | Все           | Регистрация | 201 / 400 / 409 |
-| POST   | /api/auth/login    | Все           | Пара токенов | 200 / 401 |
-| POST   | /api/auth/refresh  | Все           | Обновление пары | 200 / 401 |
-| GET    | /api/auth/me       | user+         | Текущий пользователь | 200 / 401 |
-| GET    | /api/cars          | user+         | Список (кэш 10 мин) | 200 / 401 |
-| GET    | /api/cars/:id      | user+         | По id (кэш 10 мин)  | 200 / 401 / 404 |
-| POST   | /api/cars          | seller, admin | Создать | 201 / 400 / 403 / 409 |
-| PATCH  | /api/cars/:id      | seller, admin | Обновить | 200 / 403 / 404 |
-| DELETE | /api/cars/:id      | admin         | Удалить | 204 / 403 / 404 |
-| GET    | /api/users         | admin         | Список (кэш 1 мин) | 200 / 403 |
-| GET    | /api/users/:id     | admin         | По id (кэш 1 мин)  | 200 / 403 / 404 |
-| PUT    | /api/users/:id     | admin         | Обновить | 200 / 403 / 404 |
-| DELETE | /api/users/:id     | admin         | Заблокировать | 200 / 403 / 404 |
-| GET    | /health            | —             | Health-check для Nginx | 200 |
-| GET    | /                  | —             | Отладка балансировки | 200 |
+### Полная таблица доступа
+| Метод | Путь | Роль | Кэш | Real-time | Push |
+|---|---|---|---|---|---|
+| POST   | /api/auth/register | Все           | — | — | — |
+| POST   | /api/auth/login    | Все           | — | — | — |
+| POST   | /api/auth/refresh  | Все           | — | — | — |
+| GET    | /api/auth/me       | user+         | — | — | — |
+| GET    | /api/cars          | user+         | **10 мин** | — | — |
+| GET    | /api/cars/:id      | user+         | **10 мин** | — | — |
+| POST   | /api/cars          | seller, admin | invalidate | `carCreated` | ✅ |
+| PATCH  | /api/cars/:id      | seller, admin | invalidate | `carUpdated` | — |
+| DELETE | /api/cars/:id      | admin         | invalidate | `carDeleted` | — |
+| GET    | /api/users         | admin         | **1 мин**  | — | — |
+| GET    | /api/users/:id     | admin         | **1 мин**  | — | — |
+| PUT    | /api/users/:id     | admin         | invalidate | — | — |
+| DELETE | /api/users/:id     | admin         | invalidate | — | — |
+| GET    | /api/push/vapid-public-key | — | — | — | — |
+| POST   | /api/push/subscribe        | — | — | — | — |
+| POST   | /api/push/unsubscribe      | — | — | — | — |
+| GET    | /api-docs                  | — | — | — | — |
+| GET    | /health                    | — | — | — | — |
 
 ### Формат GET-ответа cars/users
 ```json
@@ -1985,60 +2026,113 @@ practice-24-kr4-final/
 }
 ```
 
-## Как запустить
+## 🌐 Клиент
+
+### Что реализовано
+- **React 18 + Vite 5 + Sass** — тёмная тема (`#0b0f19`, accent `#818cf8`)
+- **Страницы**:
+  - `/login` — форма входа (демо-аккаунт уже подставлен)
+  - `/register` — регистрация с выбором роли
+  - `/cars` — каталог карточек, кнопки по роли (Изменить / Удалить), индикатор `cache | server`
+  - `/users` — таблица пользователей, смена роли через `<select>`, блокировка (только admin)
+- **PrivateRoute** — без токена редиректит на `/login`, без нужной роли — на `/cars`
+- **axios interceptors** — автоподстановка `Bearer <token>` + автообновление пары при `401`
+- **Socket.IO** — после входа открывается WebSocket, на `carCreated` / `carUpdated` / `carDeleted` показывается toast в правом верхнем углу
+- **PWA**: `manifest.json`, иконки, регистрация SW в `main.jsx`, кнопка «🔔 Уведомления» в header'е
+- **Swagger** — ссылка в навбаре открывает `/api-docs` в новой вкладке
+
+### Ролевая логика
+| Элемент | user | seller | admin |
+|---|---|---|---|
+| Видит каталог `/cars` | ✅ | ✅ | ✅ |
+| Кнопка «+ Добавить авто» | ❌ | ✅ | ✅ |
+| Кнопка «✏️ Изменить» | ❌ | ✅ | ✅ |
+| Кнопка «🗑️ Удалить» | ❌ | ❌ | ✅ |
+| Страница `/users` | ❌ | ❌ | ✅ |
+
+## 🚀 Как запустить
+
 ```bash
 cd practice-24-kr4-final
 docker compose up --build
 ```
 
 Что произойдёт автоматически:
-1. Поднимаются `postgres:16-alpine` и `redis:7-alpine`.
-2. После `pg_isready` запускается одноразовый `init-db` — таблицы + seed (5 авто + admin).
-3. После успешного init-db стартуют **три** инстанса `cars-backend-1/2/3`.
-4. Поднимается `nginx`, начинает балансировать.
+1. Поднимаются `postgres:16-alpine` и `redis:7-alpine`, оба с healthcheck.
+2. После `pg_isready` запускается одноразовый `init-db` — таблицы + seed:
+   - **admin: `admin@cars.local` / `admin123`**
+   - 5 автомобилей (Toyota Camry, Kia Sportage, Lada Vesta, BMW X5, Hyundai Solaris).
+3. После успешного init-db стартуют **три** инстанса `cars-backend-1/2/3` — общий Redis-адаптер для Socket.IO.
+4. Поднимается `frontend` (Nginx + встроенный React-build), начинает проксировать `/api`, `/api-docs`, `/socket.io` и отдавать SPA.
 
-## 🧪 Тестовый аккаунт (создаётся автоматически)
+Открыть **http://localhost:8080**.
+
+### VAPID-ключи (опционально)
+По умолчанию используются демо-ключи. Чтобы push-уведомления реально работали, сгенерировать свои:
+```bash
+docker compose run --rm cars-backend-1 npx web-push generate-vapid-keys
+```
+Положить в `.env` (см. `.env.example`):
+```
+VAPID_PUBLIC=B...
+VAPID_PRIVATE=...
+```
+
+## 🧪 Тестовый аккаунт
 | Email | Пароль | Роль |
 |---|---|---|
 | `admin@cars.local` | `admin123` | `admin` |
 
+Демо-учётка уже подставлена в форму входа.
+
 ## Сценарий приёмки
 ```bash
 # 1. Балансировка
-curl http://localhost:8080/   # server: cars-backend-1, потом 2, потом 1, …
+curl http://localhost:8080/api/cars   # повторить — server чередуется
 
 # 2. Логин
 TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@cars.local","password":"admin123"}' | jq -r .accessToken)
 
-# 3. PG → Redis cache
+# 3. Кэш
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/cars
-# → { "source": "server", "server": "cars-backend-2", "data": [...5 cars...] }
+# → { "source": "server", "server": "cars-backend-2", "data": [...] }
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/cars
 # → { "source": "cache",  "server": "cars-backend-1", "data": [...] }
 
 # 4. RBAC (user не может удалять)
-USER_TOKEN=...
-curl -i -X DELETE http://localhost:8080/api/cars/1 -H "Authorization: Bearer $USER_TOKEN"
+curl -i -X DELETE http://localhost:8080/api/cars/1 -H "Authorization: Bearer <USER_TOKEN>"
 # HTTP/1.1 403 Forbidden
 
 # 5. Отказоустойчивость
 docker compose stop cars-backend-1
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/cars
-# server: cars-backend-2 или cars-backend-3 (backup)
+# server: cars-backend-2 — после 2 фейлов Nginx исключает упавший на 30 сек
+
+# 6. Real-time
+# Открыть две вкладки http://localhost:8080
+# В одной создать авто — во второй мгновенно появляется toast
+
+# 7. Push
+# Войти, нажать «🔔 Уведомления», разрешить
+# Свернуть браузер
+# Из другой вкладки/curl создать авто
+# → системное push-уведомление приходит, даже если PWA закрыта
 ```
 
 ## 🔗 Адреса итогового проекта (КР4)
 | URL | Описание |
 |---|---|
-| `http://localhost:8080/`                     | Точка входа через Nginx (балансировка) |
-| `http://localhost:8080/api/cars`             | CRUD автомобилей (с ролями + кэш) |
-| `http://localhost:8080/api/users`            | CRUD пользователей (admin) |
-| `http://localhost:8080/api/auth/login`       | Логин (получение пары токенов) |
-| `http://localhost:8080/health`               | Health-check |
-| `postgres:5432` (внутри сети)                | PostgreSQL |
-| `redis:6379` (внутри сети)                   | Redis |
+| `http://localhost:8080/`            | React SPA (вход / каталог / админка) |
+| `http://localhost:8080/login`       | Страница входа |
+| `http://localhost:8080/register`    | Регистрация (можно выбрать роль) |
+| `http://localhost:8080/cars`        | Каталог автомобилей |
+| `http://localhost:8080/users`       | Управление пользователями (admin only) |
+| `http://localhost:8080/api/...`     | REST API через балансировщик |
+| `http://localhost:8080/api-docs`    | **Swagger UI** — интерактивная документация |
+| `http://localhost:8080/sw.js`       | Service Worker |
+| `http://localhost:8080/manifest.json`| PWA-манифест |
 
 ---
 
@@ -2155,10 +2249,12 @@ npm install
 npx web-push generate-vapid-keys     # подставить в server.js
 npm start                            # http://localhost:3001
 
-# КР4 — практика 24 (весь стек одной командой: PG + Redis + 3 backend + Nginx)
+# КР4 — практика 24 (объединение всех 4 КР в один проект)
+# React UI + JWT/RBAC + PWA + Socket.IO + Push + PG + Redis + 3 backend + Nginx
 cd practice-24-kr4-final
 docker compose up --build            # http://localhost:8080
-# Логин: admin@cars.local / admin123 (создаётся автоматически)
+# Демо-аккаунт: admin@cars.local / admin123 (создаётся автоматически)
+# Swagger: http://localhost:8080/api-docs
 
 # Практика 25 — React-каталог с Vite, lazy loading и bundle analyzer
 cd practice-25-vite

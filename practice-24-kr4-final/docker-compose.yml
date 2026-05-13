@@ -54,8 +54,10 @@ services:
       PGDATABASE: cars_db
       PGPORT: 5432
       REDIS_URL: redis://redis:6379
-      ACCESS_SECRET: cars_access_secret
+      ACCESS_SECRET:  cars_access_secret
       REFRESH_SECRET: cars_refresh_secret
+      VAPID_PUBLIC:  ${VAPID_PUBLIC:-BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E}
+      VAPID_PRIVATE: ${VAPID_PRIVATE:-CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid}
     networks: [cars-net]
 
   cars-backend-2:
@@ -73,8 +75,10 @@ services:
       PGDATABASE: cars_db
       PGPORT: 5432
       REDIS_URL: redis://redis:6379
-      ACCESS_SECRET: cars_access_secret
+      ACCESS_SECRET:  cars_access_secret
       REFRESH_SECRET: cars_refresh_secret
+      VAPID_PUBLIC:  ${VAPID_PUBLIC:-BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E}
+      VAPID_PRIVATE: ${VAPID_PRIVATE:-CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid}
     networks: [cars-net]
 
   cars-backend-3:
@@ -92,12 +96,15 @@ services:
       PGDATABASE: cars_db
       PGPORT: 5432
       REDIS_URL: redis://redis:6379
-      ACCESS_SECRET: cars_access_secret
+      ACCESS_SECRET:  cars_access_secret
       REFRESH_SECRET: cars_refresh_secret
+      VAPID_PUBLIC:  ${VAPID_PUBLIC:-BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E}
+      VAPID_PRIVATE: ${VAPID_PRIVATE:-CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid}
     networks: [cars-net]
 
-  nginx:
-    image: nginx:alpine
+  # Единый Nginx: отдаёт собранный фронт + проксирует /api, /api-docs, /socket.io
+  frontend:
+    build: ./frontend
     depends_on:
       - cars-backend-1
       - cars-backend-2
