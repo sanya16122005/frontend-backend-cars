@@ -1,0 +1,116 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cars_db
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks: [cars-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cars_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    networks: [cars-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Одноразовая инициализация БД (создание таблиц + seed)
+  init-db:
+    build: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: cars_db
+      PGPORT: 5432
+    command: ["node", "src/init-db.js"]
+    networks: [cars-net]
+    restart: "no"
+
+  cars-backend-1:
+    build: ./backend
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      init-db:  { condition: service_completed_successfully }
+    environment:
+      PORT: 3000
+      SERVER_ID: cars-backend-1
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: cars_db
+      PGPORT: 5432
+      REDIS_URL: redis://redis:6379
+      ACCESS_SECRET: cars_access_secret
+      REFRESH_SECRET: cars_refresh_secret
+    networks: [cars-net]
+
+  cars-backend-2:
+    build: ./backend
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      init-db:  { condition: service_completed_successfully }
+    environment:
+      PORT: 3000
+      SERVER_ID: cars-backend-2
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: cars_db
+      PGPORT: 5432
+      REDIS_URL: redis://redis:6379
+      ACCESS_SECRET: cars_access_secret
+      REFRESH_SECRET: cars_refresh_secret
+    networks: [cars-net]
+
+  cars-backend-3:
+    build: ./backend
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      init-db:  { condition: service_completed_successfully }
+    environment:
+      PORT: 3000
+      SERVER_ID: cars-backend-3
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: cars_db
+      PGPORT: 5432
+      REDIS_URL: redis://redis:6379
+      ACCESS_SECRET: cars_access_secret
+      REFRESH_SECRET: cars_refresh_secret
+    networks: [cars-net]
+
+  nginx:
+    image: nginx:alpine
+    depends_on:
+      - cars-backend-1
+      - cars-backend-2
+      - cars-backend-3
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [cars-net]
+
+networks:
+  cars-net:
+    driver: bridge
+
+volumes:
+  pg-data:

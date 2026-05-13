@@ -912,7 +912,1233 @@ npm start
 
 ---
 
-## 🚀 Быстрый старт
+# ✅ Практика 13 — Service Worker (Cache First)
+
+## Цель
+Зарегистрировать Service Worker, кэшировать статику приложения «Авто-задачи» и обеспечить **офлайн-режим**: после первой загрузки PWA должно открываться даже без сети.
+
+## Теория
+
+### Что такое Service Worker
+**Service Worker (SW)** — JavaScript-воркер в отдельном потоке, играет роль программируемого прокси между страницей и сетью. Перехватывает `fetch`, читает и пишет в `Cache Storage`, работает в фоне.
+
+Жизненный цикл: **register → install → activate → fetch**. На каждый сетевой запрос вызывается `fetch`-обработчик, в котором мы решаем — отдать из кэша, из сети или скомбинировать.
+
+### Стратегия Cache First
+```
+запрос → есть в кэше? → да → отдаём из кэша
+                       → нет → идём в сеть → отдаём ответ
+```
+Подходит для неизменной статики (HTML/CSS/JS, иконки): мгновенный ответ, работа офлайн. При изменении файлов нужно поднять версию кэша (`car-notes-v1` → `v2`).
+
+## Что реализовано
+
+### Файлы
+| Файл | Назначение |
+|---|---|
+| `index.html` | Каркас и контейнер списка задач |
+| `app.js` | Логика to-do (localStorage) + регистрация SW |
+| `sw.js` | Service Worker: install / activate / fetch |
+| `style.css` | Тёмная тема |
+
+### sw.js
+```js
+const CACHE_NAME = 'car-notes-v1';
+const ASSETS = ['/', '/index.html', '/style.css', '/app.js'];
+
+self.addEventListener('install', e => e.waitUntil(
+  caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+));
+
+self.addEventListener('activate', e => e.waitUntil(
+  caches.keys().then(keys => Promise.all(
+    keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+  ))
+));
+
+self.addEventListener('fetch', e => e.respondWith(
+  caches.match(e.request).then(cached => cached || fetch(e.request))
+));
+```
+
+### Регистрация в app.js
+```js
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () =>
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+  );
+}
+```
+
+## Как запустить
+```bash
+cd practice-13-service-worker
+# Открыть index.html через любой статический сервер (для PWA нужен http(s)://, не file://)
+npx serve .
+```
+DevTools → Application → Service Workers → статус `activated`. Offline + reload → приложение работает.
+
+---
+
+# ✅ Практика 14 — Web App Manifest (установка PWA)
+
+## Цель
+Добавить **manifest.json**, иконки и мета-теги, чтобы приложение можно было установить как нативное (значок на рабочем столе, полноэкранный режим, цвет темы).
+
+## Теория
+
+### Web App Manifest
+JSON-файл с описанием PWA для браузера и ОС: имя, иконки, режим отображения, цвет темы. Подключается через `<link rel="manifest" href="/manifest.json">`.
+
+### Условия для предложения установки
+- HTTPS (или localhost),
+- Service Worker зарегистрирован,
+- Валидный `manifest.json` с иконками 192 и 512 px,
+- Поля `start_url`, `display`.
+
+## Что реализовано
+
+### manifest.json
+```json
+{
+  "name": "Авто-задачи",
+  "short_name": "Авто",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "icons": [
+    { "src": "/icons/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
+```
+
+### Подключение в index.html
+```html
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b0f19">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+```
+
+### Иконки в `icons/`
+`favicon-16x16.png`, `favicon-32x32.png`, `apple-touch-icon.png` (180×180), `android-chrome-192x192.png`, `android-chrome-512x512.png`.
+
+## Как проверить
+1. DevTools → **Application → Manifest** — все поля валидны.
+2. В адресной строке Chrome — значок «Установить приложение», нажать.
+3. Приложение откроется без адресной строки (`display: standalone`), цвет шапки соответствует `theme_color`.
+
+---
+
+# ✅ Практика 15 — HTTPS + App Shell
+
+## Цель
+1. Запустить приложение **по HTTPS** локально (необходимо для Service Worker, push, геолокации).
+2. Перейти к архитектуре **App Shell**: каркас (шапка, табы, футер) грузится мгновенно из кэша, контент страниц подгружается динамически через `fetch`.
+
+## Теория
+
+### App Shell
+```
+┌────────────────────────────────────┐
+│  HEADER  (всегда виден)            │   ← cache-first
+├──────────┬─────────────────────────┤
+│  TABS    │  Главная │ О приложении │   ← cache-first
+├──────────┴─────────────────────────┤
+│  CONTENT (подгружается /content/*)│   ← network-first
+└────────────────────────────────────┘
+│  FOOTER                            │   ← cache-first
+└────────────────────────────────────┘
+```
+Каркас и контент кэшируются разными стратегиями в разных кэшах:
+- **Cache First** для статики → `car-shell-v1`,
+- **Network First** для `/content/*` → `car-dynamic-v1`, фолбек на `home.html`.
+
+### Локальный HTTPS через mkcert
+`mkcert` создаёт самоподписанный сертификат и добавляет его в системное доверенное хранилище — Chrome не ругается.
+
+## Что реализовано
+
+### Структура
+```text
+practice-15-app-shell/
+├── content/
+│   ├── home.html      ← форма + список задач (динамически)
+│   └── about.html     ← статичная страница «О приложении»
+├── icons/
+├── index.html         ← App Shell (header + tabs + main + footer)
+├── app.js             ← навигация + initNotes() + регистрация SW
+├── sw.js              ← две стратегии: Cache First и Network First
+├── manifest.json
+└── style.css
+```
+
+### app.js — динамическая загрузка
+```js
+async function loadContent(page) {
+  const res = await fetch(`/content/${page}.html`);
+  contentEl.innerHTML = await res.text();
+  if (page === 'home') initNotes();
+}
+
+tabs.forEach(t => t.addEventListener('click', () => {
+  setActiveTab(t.dataset.page);
+  loadContent(t.dataset.page);
+}));
+loadContent('home');
+```
+
+### sw.js — две стратегии
+```js
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  if (url.origin !== location.origin) return;
+
+  if (url.pathname.startsWith('/content/')) {              // Network First
+    event.respondWith(
+      fetch(event.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(DYNAMIC_CACHE).then(c => c.put(event.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(event.request).then(c => c || caches.match('/content/home.html')))
+    );
+    return;
+  }
+
+  event.respondWith(caches.match(event.request).then(c => c || fetch(event.request)));   // Cache First
+});
+```
+
+## Как запустить
+```powershell
+choco install mkcert
+mkcert -install
+cd practice-15-app-shell
+mkcert localhost 127.0.0.1 ::1
+
+npm install -g http-server
+http-server . --ssl --cert localhost.pem --key localhost-key.pem -p 3000
+```
+Открыть `https://localhost:3000`.
+
+## Что проверить
+1. Application → Cache Storage — два кэша: `car-shell-v1`, `car-dynamic-v1`.
+2. DevTools → Security — статус `Secure`.
+3. Slow 3G + reload — каркас сразу, контент чуть позже.
+4. Offline + reload — приложение полностью грузится из кэша.
+
+---
+
+# ✅ Практика 16 — WebSocket + Web Push
+
+## Цель
+1. **WebSocket** через Socket.IO — двусторонняя связь сервер↔клиент (toast «Новая задача» в реальном времени между вкладками).
+2. **Web Push** — уведомления приходят на ОС даже при закрытой вкладке.
+
+## Теория
+
+### WebSocket vs HTTP
+HTTP — запрос-ответ, инициатива у клиента. **WebSocket** — постоянное двустороннее соединение, сервер сам шлёт данные клиенту. **Socket.IO** — обёртка с автопереподключением и событиями.
+```
+клиент: socket.emit('newCarTask', task)
+сервер: io.on('connection', s => s.on('newCarTask', t => io.emit('carTaskAdded', t)))
+клиент: socket.on('carTaskAdded', task => showToast(...))
+```
+
+### Web Push и VAPID
+```
+сервер → push-сервис (FCM/Mozilla/…) → браузер → Service Worker → showNotification
+```
+**VAPID** — пара ключей (public/private) для подписи push-сообщений. Публичный отдаётся клиенту, приватный остаётся на сервере.
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Клиент подписывается через `PushManager.subscribe({ applicationServerKey })`, получает `{endpoint, keys}` и шлёт на сервер. Сервер хранит подписки и отправляет push через `webpush.sendNotification(sub, payload)`.
+
+## Что реализовано
+
+### Серверные эндпоинты
+| Метод | Путь | Описание |
+|---|---|---|
+| GET  | `/api/vapid-public-key` | Публичный VAPID-ключ |
+| POST | `/subscribe`            | Сохранить push-подписку |
+| POST | `/unsubscribe`          | Удалить подписку |
+
+### Socket.IO события
+| Событие | Кто | Назначение |
+|---|---|---|
+| `newCarTask`   | client → server | новая задача создана |
+| `carTaskAdded` | server → all clients | broadcast — toast |
+
+### Сервер — broadcast + push
+```js
+io.on('connection', (socket) => {
+  socket.on('newCarTask', (task) => {
+    io.emit('carTaskAdded', task);
+    const payload = JSON.stringify({ title: '🚗 Новая задача', body: task.text });
+    subscriptions.forEach(sub =>
+      webpush.sendNotification(sub, payload).catch(console.error)
+    );
+  });
+});
+```
+
+### Клиент — подписка
+```js
+async function subscribeToPush() {
+  const reg = await navigator.serviceWorker.ready;
+  const { key } = await fetch('/api/vapid-public-key').then(r => r.json());
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(key)
+  });
+  await fetch('/subscribe', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(sub)
+  });
+}
+```
+
+### Service Worker
+```js
+self.addEventListener('push', (event) => {
+  const data = event.data.json();
+  event.waitUntil(self.registration.showNotification(data.title, {
+    body: data.body,
+    icon: '/icons/android-chrome-192x192.png',
+    badge: '/icons/favicon-32x32.png'
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow('/'));
+});
+```
+
+## Как запустить
+```bash
+cd practice-16-websocket-push
+npm install
+npx web-push generate-vapid-keys     # подставить в server.js
+npm start                            # http://localhost:3001
+```
+
+## Как проверить
+1. Открыть **две вкладки**.
+2. В одной нажать «🔔 Включить уведомления», разрешить.
+3. В другой добавить задачу — в первой появится toast.
+4. Свернуть браузер → добавить задачу → push приходит на уровне ОС.
+
+---
+
+# ✅ Практика 17 — Детализация Push (запланированные напоминания)
+
+## Цель
+Добавить **запланированные напоминания**: пользователь выбирает дату/время, сервер планирует push на этот момент. В уведомлении — кнопка **«⏸ Отложить на 5 минут»**, которая пересоздаёт таймер.
+
+## Теория
+
+### Actions в push-уведомлении
+```js
+{
+  actions: [
+    { action: 'snooze', title: '⏸ Отложить на 5 минут' }
+  ]
+}
+```
+При нажатии срабатывает `notificationclick` с `event.action === 'snooze'`. Через `event.waitUntil(fetch(...))` SW делает запрос на сервер, не закрывая уведомление до завершения.
+
+### Хранение таймеров
+Сервер держит `Map<id, { timeoutId, text, reminderTime }>`. При snooze:
+```js
+clearTimeout(reminder.timeoutId);
+const newTime = Date.now() + 5 * 60 * 1000;
+scheduleReminder({ id, text, reminderTime: newTime });
+```
+
+## Что реализовано
+
+### Структура задач в localStorage
+```js
+[
+  { id: 1700000000000, text: 'ТО Audi A4', done: false, reminder: 1700003600000 }
+]
+```
+
+### Серверные эндпоинты
+| Метод | Путь | Описание |
+|---|---|---|
+| GET  | `/api/vapid-public-key`  | Публичный VAPID-ключ |
+| POST | `/subscribe`             | Сохранить подписку |
+| POST | `/unsubscribe`           | Удалить подписку |
+| POST | `/snooze?reminderId=…`   | Перепланировать на +5 минут |
+| GET  | `/reminders`             | Список активных напоминаний (отладка) |
+
+### Socket.IO события
+| Событие | Описание |
+|---|---|
+| `newCarTask`        | новая задача без напоминания |
+| `carTaskAdded`      | broadcast — toast |
+| `newReminder`       | задача с напоминанием → сервер планирует таймер |
+| `reminderScheduled` | подтверждение от сервера |
+| `reminderSnoozed`   | broadcast: напоминание отложено |
+
+### Серверный планировщик
+```js
+const reminders = new Map();
+const SNOOZE_MS = 5 * 60 * 1000;
+
+function scheduleReminder({ id, text, reminderTime }) {
+  const delay = reminderTime - Date.now();
+  if (delay <= 0) return;
+  const timeoutId = setTimeout(() => {
+    broadcastPush({ title: '⏰ Напоминание', body: text, reminderId: id });
+    reminders.delete(id);
+  }, delay);
+  reminders.set(id, { timeoutId, text, reminderTime });
+}
+
+app.post('/snooze', (req, res) => {
+  const id = Number(req.query.reminderId);
+  const r = reminders.get(id);
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  clearTimeout(r.timeoutId);
+  scheduleReminder({ id, text: r.text, reminderTime: Date.now() + SNOOZE_MS });
+  res.json({ message: 'Snoozed' });
+});
+```
+
+### Push с действием в Service Worker
+```js
+self.addEventListener('push', (event) => {
+  const data = event.data.json();
+  const options = {
+    body: data.body, icon: '/icons/android-chrome-192x192.png',
+    data: { reminderId: data.reminderId }
+  };
+  if (data.reminderId) {
+    options.actions = [{ action: 'snooze', title: '⏸ Отложить на 5 минут' }];
+  }
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  const { reminderId } = event.notification.data || {};
+  if (event.action === 'snooze' && reminderId) {
+    event.waitUntil(
+      fetch(`/snooze?reminderId=${reminderId}`, { method: 'POST' })
+        .then(() => event.notification.close())
+    );
+    return;
+  }
+  event.notification.close();
+  event.waitUntil(clients.openWindow('/'));
+});
+```
+
+## Как запустить
+```bash
+cd practice-17-push-reminders
+npm install
+npx web-push generate-vapid-keys     # подставить в server.js
+npm start                            # http://localhost:3001
+```
+
+## Как проверить
+1. Разрешить уведомления.
+2. Создать задачу с напоминанием на 2–3 минуты вперёд.
+3. Закрыть вкладку.
+4. В нужное время приходит push с кнопкой «⏸ Отложить на 5 минут».
+5. Нажать — push повторится через 5 минут.
+
+---
+
+# ⭐ Практика 18 — Итоговый проект (КР3)
+
+## Цель
+Собрать практики 13–17 в единое PWA «Авто-задачи»:
+- Service Worker + офлайн (13)
+- Web App Manifest + установка (14)
+- HTTPS + App Shell с двумя кэшами (15)
+- WebSocket + Web Push (16)
+- Запланированные напоминания + snooze (17)
+
+Самое полное приложение блока — `practice-17-push-reminders/` (унаследовало всё от предыдущих).
+
+## Архитектура (на примере практики 17)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       Browser                               │
+│  ┌────────────┐  ┌────────────────┐  ┌──────────────────┐   │
+│  │ App Shell  │  │ /content/*.html│  │  Service Worker  │   │
+│  │  (cached)  │  │ (network-first)│  │  (cache + push)  │   │
+│  └────────────┘  └────────────────┘  └──────────────────┘   │
+│        │                  │                    │            │
+│        └──────── localStorage (задачи) ────────┘            │
+│        │                  │                    │            │
+└────────┼──────────────────┼────────────────────┼────────────┘
+         │ Socket.IO        │ HTTP fetch         │ Push (через ОС)
+         ▼                  ▼                    ▲
+┌─────────────────────────────────────────────────────────────┐
+│  Express + Socket.IO + web-push (server.js, port 3001)      │
+│                                                             │
+│  subscriptions[]                                            │
+│  reminders: Map<id, { timeoutId, text, reminderTime }>      │
+│                                                             │
+│  /subscribe   /unsubscribe   /snooze   /reminders           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 🔗 Адреса итогового приложения (КР3)
+| URL | Описание |
+|---|---|
+| `http://localhost:3001/`                    | PWA «Авто-задачи» |
+| `http://localhost:3001/content/home.html`   | Динамический контент главной |
+| `http://localhost:3001/content/about.html`  | Динамический контент «О приложении» |
+| `http://localhost:3001/api/vapid-public-key`| Публичный VAPID-ключ |
+| `http://localhost:3001/reminders`           | Список активных напоминаний |
+
+## Чек-лист
+- [x] SW регистрируется, статика кэшируется.
+- [x] manifest валиден, иконки 192/512, можно установить PWA.
+- [x] App Shell + два кэша работают, offline загружается.
+- [x] Socket.IO рассылает события между вкладками.
+- [x] Push приходит при закрытой вкладке.
+- [x] Запланированное напоминание срабатывает в нужное время.
+- [x] Snooze пересоздаёт таймер на +5 минут.
+
+## Как запустить
+```bash
+cd practice-17-push-reminders
+npm install
+npx web-push generate-vapid-keys     # подставить в server.js
+npm start                            # http://localhost:3001
+```
+
+---
+
+# ✅ Практика 19 — PostgreSQL
+
+## Цель
+REST API для управления автомобилями на **Express + pg + PostgreSQL**. Параметризованные запросы, проверки целостности (`CHECK`, `UNIQUE`), индексы.
+
+## Теория
+
+### Реляционная СУБД
+Хранит данные в **таблицах** с фиксированной схемой. Каждая колонка имеет тип, есть индексы и ограничения целостности (`PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, `CHECK`). Запросы — на **SQL**.
+
+### Драйвер `pg` и пул соединений
+```js
+const { Pool } = require('pg');
+const pool = new Pool({ user, host, database, password, port });
+
+// Параметризованный запрос — защита от SQL-инъекций
+const { rows } = await pool.query('SELECT * FROM cars WHERE id = $1', [id]);
+```
+
+## Что реализовано
+
+### Модель Car
+| Поле | Тип | Описание |
+|---|---|---|
+| id          | `SERIAL PRIMARY KEY`        | автоинкремент |
+| brand       | `VARCHAR(80) NOT NULL`      | производитель |
+| model       | `VARCHAR(120) NOT NULL`     | модель |
+| year        | `INTEGER` (CHECK 1900–2100) | год выпуска |
+| price       | `NUMERIC(12,2)` (CHECK ≥0)  | цена ₽ |
+| vin         | `VARCHAR(17) UNIQUE`        | VIN |
+| created_at  | `TIMESTAMPTZ DEFAULT NOW()` | создан |
+| updated_at  | `TIMESTAMPTZ DEFAULT NOW()` | обновлён |
+
+Индексы: `idx_cars_brand`, `idx_cars_year`.
+
+### API эндпоинты
+| Метод | Путь | Описание | Статус |
+|---|---|---|---|
+| GET    | /api/cars       | Все авто               | 200 |
+| GET    | /api/cars/:id   | Авто по id             | 200 / 404 |
+| POST   | /api/cars       | Создать                | 201 / 400 / 409 |
+| PATCH  | /api/cars/:id   | Обновить (любые поля)  | 200 / 400 / 404 |
+| DELETE | /api/cars/:id   | Удалить                | 204 / 404 |
+
+### Динамический PATCH
+```js
+const fields = ['brand','model','year','price','vin'];
+const updates = [], values = [];
+let idx = 1;
+for (const f of fields) {
+  if (req.body[f] !== undefined) { updates.push(`${f} = $${idx++}`); values.push(req.body[f]); }
+}
+updates.push('updated_at = NOW()');
+values.push(req.params.id);
+const { rows } = await pool.query(
+  `UPDATE cars SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+  values
+);
+```
+
+## Как запустить
+```bash
+psql -U postgres -c "CREATE DATABASE cars_db;"
+cd practice-19-postgres
+npm install
+npm run init-db        # таблица + индексы
+npm start              # http://localhost:3000
+```
+
+---
+
+# ✅ Практика 20 — MongoDB
+
+## Цель
+Тот же CRUD-API автомобилей, но на **MongoDB** через ODM **mongoose**. Сравнить с РСУБД: гибкая схема, документы, агрегации.
+
+## Теория
+
+### NoSQL и MongoDB
+**MongoDB** — документоориентированная NoSQL-СУБД. Хранит **документы** (BSON ≈ бинарный JSON) в **коллекциях**. Документы могут иметь разные поля, вложенные структуры, массивы.
+
+### Mongoose
+```js
+const carSchema = new mongoose.Schema({
+  brand: { type: String, required: true },
+  year:  { type: Number, min: 1900, max: 2100 }
+}, { timestamps: true });
+
+const Car = mongoose.model('Car', carSchema);
+```
+`timestamps: true` автоматически добавляет `createdAt` и `updatedAt`.
+
+### Pipeline-агрегация
+```js
+Car.aggregate([
+  { $group: { _id: '$brand', avgPrice: { $avg: '$price' }, count: { $sum: 1 } } },
+  { $sort:  { avgPrice: -1 } }
+]);
+```
+
+## Что реализовано
+
+### Модель Car
+| Поле | Тип | Описание |
+|---|---|---|
+| `_id`        | ObjectId                     | автоматический |
+| `brand`      | String required, **index**   | производитель |
+| `model`      | String required              | модель |
+| `year`       | Number 1900–2100, **index**  | год |
+| `price`      | Number ≥ 0                   | цена |
+| `vin`        | String, **unique sparse**    | VIN-номер (опц.) |
+| `createdAt`  | Date — timestamps            | создан |
+| `updatedAt`  | Date — timestamps            | обновлён |
+
+> **unique sparse** позволяет нескольким документам не иметь VIN, но если он есть — уникален.
+
+### API эндпоинты
+| Метод | Путь | Описание | Статус |
+|---|---|---|---|
+| GET    | /api/cars                   | Все авто           | 200 |
+| GET    | /api/cars/:id               | Авто по id         | 200 / 400 / 404 |
+| POST   | /api/cars                   | Создать            | 201 / 400 / 409 |
+| PATCH  | /api/cars/:id               | Обновить           | 200 / 400 / 404 |
+| DELETE | /api/cars/:id               | Удалить            | 204 / 404 |
+| GET    | /api/cars-stats/avg-price   | **Бонус**: средняя цена по бренду | 200 |
+
+### Пример агрегации
+```json
+GET /api/cars-stats/avg-price
+[
+  { "_id": "BMW",    "avgPrice": 7500000, "count": 2 },
+  { "_id": "Audi",   "avgPrice": 4200000, "count": 1 },
+  { "_id": "Toyota", "avgPrice": 2500000, "count": 3 }
+]
+```
+
+## Как запустить
+```bash
+docker run -d -p 27017:27017 --name mongo mongo:7
+cd practice-20-mongodb
+npm install
+npm start              # http://localhost:3000
+```
+
+## Сравнение PostgreSQL vs MongoDB
+| Аспект | PostgreSQL (19) | MongoDB (20) |
+|---|---|---|
+| Схема       | Жёсткая (CREATE TABLE) | Гибкая (определяется в коде) |
+| Запросы     | SQL                    | Mongoose API + JS-объекты |
+| Уникальность| `UNIQUE` ограничение   | `unique: true` (+ sparse) |
+| Связи       | `FOREIGN KEY`          | Ссылки `ref` или вложенные документы |
+| Агрегации   | `GROUP BY`, оконные функции | Pipeline (`$group`, `$lookup`, …) |
+
+---
+
+# ✅ Практика 21 — Redis-кэш
+
+## Цель
+Добавить слой **кэша Redis** поверх RBAC-сервера из практики 11. Часто запрашиваемые данные отдавать из памяти Redis, а не пересчитывать каждый раз. Обеспечить **инвалидацию** кэша при изменении данных.
+
+## Теория
+
+### Redis
+**Redis** — in-memory key-value хранилище. Используется как кэш, брокер сессий, очередь. Десятки тысяч операций в секунду, поддержка TTL.
+
+```
+SET   users:all  "{...}"  EX 60        # сохранить на 60 секунд
+GET   users:all                        # прочитать
+DEL   users:all                        # удалить
+```
+
+### Схема работы кэша
+```
+запрос → есть в Redis по ключу X? → да → отдать (source: cache)
+                                   → нет → достать из источника
+                                          → положить в Redis с TTL
+                                          → отдать (source: server)
+```
+
+### Инвалидация
+```js
+async function invalidateCarsCache(id) {
+  await redis.del('cars:all');
+  if (id) await redis.del(`cars:${id}`);
+}
+```
+
+## Что реализовано
+
+### Кэширующий middleware
+```js
+function cacheMiddleware(keyBuilder, ttl) {
+  return async (req, res, next) => {
+    const key = keyBuilder(req);
+    const cached = await redis.get(key);
+    if (cached) return res.json({ source: 'cache', data: JSON.parse(cached) });
+    req.cacheKey = key;
+    req.cacheTTL = ttl;
+    next();
+  };
+}
+```
+
+Каждый GET-обработчик после получения данных вызывает `saveToCache(req.cacheKey, data, req.cacheTTL)`.
+
+### Кэшируемые маршруты
+| Маршрут | TTL | Ключ Redis | Инвалидация при |
+|---|---|---|---|
+| GET /api/users     | 1 мин  | `users:all`  | POST/PUT/DELETE /api/users… |
+| GET /api/users/:id | 1 мин  | `users:<id>` | PUT/DELETE того же id |
+| GET /api/cars      | 10 мин | `cars:all`   | POST/PUT/DELETE /api/cars… |
+| GET /api/cars/:id  | 10 мин | `cars:<id>`  | PUT/DELETE того же id |
+
+### Структура ответа
+```json
+{ "source": "cache", "data": [ ... ] }
+```
+Поле `source` нужно для отладки.
+
+### Полная цепочка GET /api/cars
+```js
+app.get('/api/cars',
+  authMiddleware,
+  roleMiddleware(['user','seller','admin']),
+  cacheMiddleware(() => 'cars:all', PRODUCTS_TTL),
+  async (req, res) => {
+    await saveToCache(req.cacheKey, cars, req.cacheTTL);
+    res.json({ source: 'server', data: cars });
+  }
+);
+```
+
+## Как запустить
+```bash
+docker run -d --name redis-cars -p 6379:6379 redis:7-alpine
+cd practice-21-redis-cache/server
+npm install
+npm start              # http://localhost:3000
+```
+
+## Как проверить
+```bash
+# Первый запрос — source: server
+curl http://localhost:3000/api/cars -H "Authorization: Bearer $TOKEN"
+# Повторный запрос в течение 10 минут — source: cache
+# После PUT — снова source: server (инвалидация сработала)
+```
+
+---
+
+# ✅ Практика 22 — Балансировка нагрузки (Nginx + HAProxy)
+
+## Цель
+Запустить **три идентичных backend-инстанса** cars-API на разных портах и распределить нагрузку. Сделать это двумя балансировщиками — **Nginx** и **HAProxy** — и проверить отказоустойчивость.
+
+## Теория
+
+### Алгоритмы Nginx
+- **Round Robin** (по умолчанию) — запросы по кругу.
+- **Least Connections** — на инстанс с минимумом активных соединений.
+- **IP Hash** — клиент с одним IP всегда попадает на один и тот же инстанс.
+
+### Отказоустойчивость в Nginx
+```nginx
+upstream cars_backend {
+    server 127.0.0.1:3001 max_fails=2 fail_timeout=30s;
+    server 127.0.0.1:3002 max_fails=2 fail_timeout=30s;
+    server 127.0.0.1:3003 backup;
+}
+```
+- `max_fails=2 fail_timeout=30s` — после 2 фейлов инстанс на 30 сек исключается.
+- `backup` — резервный, используется если основные недоступны.
+
+### HAProxy и health-check
+```haproxy
+backend cars_back
+    balance roundrobin
+    option httpchk GET /health
+    server cars1 127.0.0.1:3001 check inter 5s fall 3 rise 2
+```
+
+## Что реализовано
+
+### Топология
+```
+                ┌──────────────┐
+        :8080 → │    Nginx     │ ┐
+                └──────────────┘ │
+                                 ├──→ cars-3001 (active)
+                ┌──────────────┐ │
+        :8090 → │   HAProxy    │ ┼──→ cars-3002 (active)
+                └──────────────┘ │
+                                 └──→ cars-3003 (backup)
+```
+
+### Backend (одинаковый код, разный SERVER_ID)
+```js
+const PORT      = Number(process.env.PORT) || 3000;
+const SERVER_ID = process.env.SERVER_ID    || `cars-${PORT}`;
+
+app.get('/', (req, res) => res.json({ server: SERVER_ID, host, port: PORT }));
+app.get('/health', (req, res) => res.status(200).send('OK'));
+```
+
+## Как запустить
+```bash
+cd practice-22-load-balancing/backend && npm install
+./start-backends.sh                     # Linux/WSL
+.\start-backends.ps1                    # Windows
+
+# Балансировщик
+nginx  -c $(pwd)/../nginx/nginx.conf -p $(pwd)/../nginx       # :8080
+haproxy -f ../haproxy/haproxy.cfg                              # :8090
+```
+
+## Как проверить
+```bash
+curl http://localhost:8080/   # повторить 4-6 раз
+# server: cars-3001, cars-3002, cars-3001, cars-3002, …
+
+# Отказоустойчивость
+docker compose stop cars-3001
+curl http://localhost:8080/   # все запросы идут на cars-3002
+```
+
+---
+
+# ✅ Практика 23 — Контейнеризация (Docker + Docker Compose)
+
+## Цель
+То же приложение, что в практике 22, но в **контейнерах Docker**: каждый backend — отдельный контейнер, Nginx — отдельный контейнер. Всё запускается одной командой.
+
+## Теория
+
+### Docker
+**Контейнер** упаковывает приложение со всеми зависимостями в изолированный образ. Запускается одинаково на любой машине, использует ядро ОС хоста (быстрее VM).
+
+| Понятие | Что это |
+|---|---|
+| Image      | Шаблон с готовой ФС и зависимостями |
+| Container  | Запущенный экземпляр образа |
+| Dockerfile | Инструкции для сборки образа |
+| Compose    | Декларативное описание стека |
+| Volume     | Хранилище данных, переживает удаление контейнера |
+| Network    | Изолированная сеть, контейнеры видят друг друга по DNS |
+
+### Кэширование слоёв
+```dockerfile
+COPY package*.json ./
+RUN npm install --omit=dev   # ← кэшируется отдельно
+COPY . .                     # ← код меняется чаще
+```
+
+## Что реализовано
+
+### Dockerfile
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### docker-compose.yml
+```yaml
+services:
+  cars-backend-1:
+    build: ./backend
+    environment: [PORT=3000, SERVER_ID=cars-backend-1]
+    networks: [cars-net]
+  cars-backend-2:
+    build: ./backend
+    environment: [PORT=3000, SERVER_ID=cars-backend-2]
+    networks: [cars-net]
+  cars-backend-3:
+    build: ./backend
+    environment: [PORT=3000, SERVER_ID=cars-backend-3]
+    networks: [cars-net]
+  nginx:
+    image: nginx:alpine
+    depends_on: [cars-backend-1, cars-backend-2, cars-backend-3]
+    ports: ["8080:80"]
+    volumes: ["./nginx/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    networks: [cars-net]
+
+networks:
+  cars-net: { driver: bridge }
+```
+
+### Nginx внутри сети `cars-net`
+```nginx
+upstream cars_backend {
+    # Балансировка по DNS-именам сервисов compose
+    server cars-backend-1:3000 max_fails=2 fail_timeout=30s;
+    server cars-backend-2:3000 max_fails=2 fail_timeout=30s;
+    server cars-backend-3:3000 backup;
+}
+```
+
+### Топология
+```
+   host:8080
+       │
+       ▼
+┌───────────────┐
+│ nginx:alpine  │   ← единственный с пробросом порта наружу
+└──────┬────────┘
+       │ Round Robin (внутри cars-net)
+       ├──→ cars-backend-1:3000
+       ├──→ cars-backend-2:3000
+       └──→ cars-backend-3:3000 (backup)
+```
+
+## Как запустить
+```bash
+cd practice-23-docker
+docker compose up --build
+```
+
+## Полезные команды
+```bash
+docker compose ps
+docker compose logs -f nginx
+docker compose exec cars-backend-1 sh
+docker compose down       # остановить
+docker compose down -v    # + удалить тома
+```
+
+---
+
+# ⭐ Практика 24 — Итоговый проект (КР4)
+
+## Цель
+Объединить результаты практик 19–23 в **один Docker-стек** с авторизацией и ролевой моделью из практики 11:
+- PostgreSQL (19) как источник данных
+- Redis (21) как слой кэша поверх PG
+- RBAC (11) — три роли user/seller/admin, JWT access+refresh
+- Nginx (22) балансирует трафик между **тремя backend-инстансами**
+- Docker Compose (23) поднимает весь стек одной командой
+- `init-db` сервис автоматически создаёт таблицы и засевает данные
+
+## Структура
+```text
+practice-24-kr4-final/
+├── backend/
+│   ├── Dockerfile                  # FROM node:18-alpine + кэш слоёв
+│   ├── .dockerignore
+│   ├── package.json
+│   └── src/
+│       ├── server.js               # Express, /, /health, монтаж роутов
+│       ├── db.js                   # pg.Pool
+│       ├── redis.js                # createClient + cacheGet/cacheSet/cacheDel
+│       ├── init-db.js              # CREATE TABLE users/cars + seed
+│       ├── auth.js                 # JWT access/refresh + middleware
+│       └── routes/
+│           ├── auth.js             # register, login, refresh, me
+│           ├── users.js            # CRUD admin-only + Redis cache
+│           └── cars.js             # CRUD по RBAC-ролям + Redis cache
+├── nginx/
+│   └── nginx.conf                  # upstream → 3 backend, max_fails, backup
+└── docker-compose.yml              # postgres + redis + 3 backend + nginx + init-db
+```
+
+## 🏗️ Архитектура стека
+
+```
+                   client (browser / Postman)
+                          │
+                          ▼  http://localhost:8080
+                  ┌───────────────┐
+                  │ nginx:alpine  │     ← практика 22 (LB) + 23 (Docker)
+                  └──────┬────────┘
+                         │ Round Robin
+            ┌────────────┼────────────┐
+            ▼            ▼            ▼
+       ┌─────────┐ ┌─────────┐ ┌─────────┐
+       │ back-1  │ │ back-2  │ │ back-3  │   ← практика 11 (RBAC)
+       │  :3000  │ │  :3000  │ │  :3000  │     + 19 (PG) + 21 (Redis cache)
+       └────┬────┘ └────┬────┘ └────┬────┘
+            └───────────┼───────────┘
+                        │
+              ┌─────────┴─────────┐
+              ▼                   ▼
+         ┌──────────┐        ┌─────────┐
+         │ postgres │        │  redis  │
+         │   :5432  │        │  :6379  │
+         └──────────┘        └─────────┘
+                  ↑ pg-data (volume)
+```
+Только Nginx торчит наружу через `8080:80`. Остальное изолировано в bridge-сети `cars-net` и общается по DNS-именам сервисов.
+
+## 🖥️ Сервер
+
+### Что реализовано
+- `express.json()` + `cors`
+- Логирование всех запросов с указанием `SERVER_ID`
+- `authMiddleware` — проверка JWT access-токена в заголовке `Authorization: Bearer …`
+- `roleMiddleware(roles)` — проверка роли из payload токена
+- Полный CRUD автомобилей с ролевой защитой
+- Полный CRUD пользователей (только admin), мягкое удаление через `blocked = true`
+- Redis-кэш на GET-маршруты с автоматической инвалидацией при POST/PATCH/PUT/DELETE
+- `init-db` сервис создаёт таблицы и засевает 5 авто + admin (`admin@cars.local / admin123`)
+- Порядок старта через `depends_on: condition: service_healthy/completed_successfully`
+
+### Модель Car (таблица `cars`)
+| Поле | Тип | Описание |
+|---|---|---|
+| id          | `SERIAL PRIMARY KEY`        | автоинкремент |
+| brand       | `VARCHAR(80) NOT NULL`      | производитель |
+| model       | `VARCHAR(120) NOT NULL`     | модель |
+| year        | `INTEGER` (CHECK 1900–2100) | год выпуска |
+| price       | `NUMERIC(12,2)` (CHECK ≥0)  | цена ₽ |
+| vin         | `VARCHAR(17) UNIQUE`        | VIN |
+| created_at  | `TIMESTAMPTZ DEFAULT NOW()` | создан |
+| updated_at  | `TIMESTAMPTZ DEFAULT NOW()` | обновлён |
+
+### Модель User (таблица `users`)
+| Поле | Тип | Описание |
+|---|---|---|
+| id            | `VARCHAR(40) PRIMARY KEY` | nanoid |
+| email         | `VARCHAR(120) UNIQUE`     | логин |
+| first_name    | `VARCHAR(80)`             | имя |
+| last_name     | `VARCHAR(80)`             | фамилия |
+| password_hash | `VARCHAR(120)`            | bcrypt-хеш |
+| role          | `VARCHAR(20)`             | `user` / `seller` / `admin` |
+| blocked       | `BOOLEAN`                 | мягкое удаление |
+| created_at    | `TIMESTAMPTZ`             | создан |
+
+### API эндпоинты
+| Метод | Путь | Роль | Описание | Статус |
+|---|---|---|---|---|
+| POST   | /api/auth/register | Все           | Регистрация | 201 / 400 / 409 |
+| POST   | /api/auth/login    | Все           | Пара токенов | 200 / 401 |
+| POST   | /api/auth/refresh  | Все           | Обновление пары | 200 / 401 |
+| GET    | /api/auth/me       | user+         | Текущий пользователь | 200 / 401 |
+| GET    | /api/cars          | user+         | Список (кэш 10 мин) | 200 / 401 |
+| GET    | /api/cars/:id      | user+         | По id (кэш 10 мин)  | 200 / 401 / 404 |
+| POST   | /api/cars          | seller, admin | Создать | 201 / 400 / 403 / 409 |
+| PATCH  | /api/cars/:id      | seller, admin | Обновить | 200 / 403 / 404 |
+| DELETE | /api/cars/:id      | admin         | Удалить | 204 / 403 / 404 |
+| GET    | /api/users         | admin         | Список (кэш 1 мин) | 200 / 403 |
+| GET    | /api/users/:id     | admin         | По id (кэш 1 мин)  | 200 / 403 / 404 |
+| PUT    | /api/users/:id     | admin         | Обновить | 200 / 403 / 404 |
+| DELETE | /api/users/:id     | admin         | Заблокировать | 200 / 403 / 404 |
+| GET    | /health            | —             | Health-check для Nginx | 200 |
+| GET    | /                  | —             | Отладка балансировки | 200 |
+
+### Формат GET-ответа cars/users
+```json
+{
+  "source": "cache",          // или "server"
+  "server": "cars-backend-2", // какой backend ответил
+  "data": [ ... ]
+}
+```
+
+## Как запустить
+```bash
+cd practice-24-kr4-final
+docker compose up --build
+```
+
+Что произойдёт автоматически:
+1. Поднимаются `postgres:16-alpine` и `redis:7-alpine`.
+2. После `pg_isready` запускается одноразовый `init-db` — таблицы + seed (5 авто + admin).
+3. После успешного init-db стартуют **три** инстанса `cars-backend-1/2/3`.
+4. Поднимается `nginx`, начинает балансировать.
+
+## 🧪 Тестовый аккаунт (создаётся автоматически)
+| Email | Пароль | Роль |
+|---|---|---|
+| `admin@cars.local` | `admin123` | `admin` |
+
+## Сценарий приёмки
+```bash
+# 1. Балансировка
+curl http://localhost:8080/   # server: cars-backend-1, потом 2, потом 1, …
+
+# 2. Логин
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@cars.local","password":"admin123"}' | jq -r .accessToken)
+
+# 3. PG → Redis cache
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/cars
+# → { "source": "server", "server": "cars-backend-2", "data": [...5 cars...] }
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/cars
+# → { "source": "cache",  "server": "cars-backend-1", "data": [...] }
+
+# 4. RBAC (user не может удалять)
+USER_TOKEN=...
+curl -i -X DELETE http://localhost:8080/api/cars/1 -H "Authorization: Bearer $USER_TOKEN"
+# HTTP/1.1 403 Forbidden
+
+# 5. Отказоустойчивость
+docker compose stop cars-backend-1
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/cars
+# server: cars-backend-2 или cars-backend-3 (backup)
+```
+
+## 🔗 Адреса итогового проекта (КР4)
+| URL | Описание |
+|---|---|
+| `http://localhost:8080/`                     | Точка входа через Nginx (балансировка) |
+| `http://localhost:8080/api/cars`             | CRUD автомобилей (с ролями + кэш) |
+| `http://localhost:8080/api/users`            | CRUD пользователей (admin) |
+| `http://localhost:8080/api/auth/login`       | Логин (получение пары токенов) |
+| `http://localhost:8080/health`               | Health-check |
+| `postgres:5432` (внутри сети)                | PostgreSQL |
+| `redis:6379` (внутри сети)                   | Redis |
+
+---
+
+# ✅ Практика 25 — Инструменты сборки (Vite)
+
+## Цель
+React-приложение «Cars Catalog» с настроенным **Vite**, **ленивой загрузкой страниц** и **анализатором бандла**.
+
+## Теория
+
+### Vite
+**Vite** — современный инструмент сборки. В режиме разработки использует нативные ES-модули и `esbuild` (мгновенный старт, мгновенный HMR). В production использует `Rollup` для оптимизированной сборки.
+
+### Code Splitting
+**Динамический import()** говорит бандлеру вынести модуль в отдельный чанк:
+```jsx
+const Catalog = lazy(() => import('./pages/Catalog.jsx'));
+
+<Suspense fallback={<Loader />}>
+  <Routes>
+    <Route path="/catalog" element={<Catalog />} />
+  </Routes>
+</Suspense>
+```
+Browser запросит `Catalog-[hash].js` только при первом рендере.
+
+### Tree-shaking
+Production-сборка автоматически выбрасывает неиспользуемые экспорты. Работает только с ES-модулями (`import`/`export`).
+
+## Что реализовано
+
+### Структура
+```
+practice-25-vite/
+├── index.html
+├── vite.config.js          # plugins: react + visualizer, manualChunks
+├── src/
+│   ├── main.jsx
+│   ├── App.jsx             # роуты + Suspense + React.lazy
+│   ├── styles.css
+│   ├── pages/
+│   │   ├── Home.jsx        # в основном бандле
+│   │   ├── Catalog.jsx     # отдельный чанк (lazy)
+│   │   └── About.jsx       # отдельный чанк (lazy)
+│   └── components/
+│       └── CarCard.jsx
+└── package.json
+```
+
+### vite.config.js
+```js
+export default defineConfig({
+  plugins: [react(), visualizer({ filename: 'dist/bundle-report.html', gzipSize: true, brotliSize: true })],
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'router':       ['react-router-dom']
+        }
+      }
+    }
+  }
+});
+```
+
+### Что попадает в бандл
+```
+dist/
+├── assets/
+│   ├── react-vendor-[hash].js     # react + react-dom (manualChunks)
+│   ├── router-[hash].js           # react-router-dom (manualChunks)
+│   ├── Catalog-[hash].js          # lazy chunk
+│   ├── About-[hash].js            # lazy chunk
+│   ├── index-[hash].js            # main bundle (Home + App)
+│   └── index-[hash].css
+├── bundle-report.html             # 🔍 интерактивная карта бандла
+└── index.html
+```
+
+## Как запустить
+```bash
+cd practice-25-vite
+npm install
+npm run dev          # http://localhost:5173 (HMR, мгновенный старт)
+npm run build        # → dist/ + dist/bundle-report.html
+npm run preview      # локальный просмотр собранной версии
+```
+
+## Как проверить lazy loading
+1. `npm run dev`, открыть DevTools → Network.
+2. На главной не загружаются `Catalog-*.js` и `About-*.js`.
+3. Кликнуть «Каталог» — в Network появляется запрос `Catalog-*.js`.
+4. Кликнуть «О нас» — запрос `About-*.js`.
+5. Открыть `dist/bundle-report.html` после `npm run build` — интерактивная treemap с размерами всех чанков.
+
+---
+
+## 🚀 Быстрый старт (все КР)
 
 ```bash
 # КР1 — практика 6
@@ -922,99 +2148,21 @@ cd practice-06-final/client && npm install && npm start
 # КР2 — практика 12
 cd practice-12-final/server && npm install && npm start
 cd practice-12-final/client && npm install && npm start
-```
 
----
-
-# 🟣 КР3 (практики 13–17) — PWA «Авто-задачи»
-
-| Папка | Что внутри | Результат |
-|---|---|---|
-| `practice-13-service-worker` | Service Worker, Cache First | Офлайн-страница, кэширование статики |
-| `practice-14-manifest` | PWA-манифест, иконки | Установка на главный экран |
-| `practice-15-app-shell` | App Shell + HTTPS (mkcert) | Каркас кэшируется, контент `/content/*` грузится Network First |
-| `practice-16-websocket-push` | Socket.IO + web-push + VAPID | Уведомления в реальном времени и системные push |
-| `practice-17-push-reminders` | Запланированные напоминания + snooze | Push приходит по таймеру, кнопка «Отложить на 5 минут» |
-| `practice-18-kr3-final` | **Финальный README КР3** | Итог по всему блоку PWA |
-
-## ✅ Практика 13 — Service Worker (Cache First)
-PWA-каркас, кэш `car-notes-v2`, офлайн-режим, регистрация SW из `app.js`.
-
-## ✅ Практика 14 — Web App Manifest
-Иконки 16/32/192/512, цвет темы `#0b0f19`, установка приложения через браузер.
-
-## ✅ Практика 15 — HTTPS + App Shell
-Архитектура App Shell: `index.html` — каркас, `content/home.html` и `content/about.html` подгружаются динамически через `fetch`. Два кэша: `car-shell-v1` (Cache First для статики) и `car-dynamic-v1` (Network First для контента, фолбек на `home.html`). HTTPS через `mkcert` + `http-server --ssl`.
-
-## ✅ Практика 16 — WebSocket + Push
-Express + Socket.IO + web-push. События `newCarTask` → `carTaskAdded` рассылаются всем вкладкам, push-уведомления через VAPID-ключи приходят даже при закрытом окне. Кнопки «Включить / Отключить уведомления» в футере.
-
-## ✅ Практика 17 — Детализация Push (напоминания)
-Форма «Задача с напоминанием» (текст + datetime-local). Сервер планирует push через `setTimeout`, хранит активные таймеры в `Map<id, {timeoutId, …}>`. В уведомлении кнопка `⏸ Отложить на 5 минут` — Service Worker ловит `notificationclick` и шлёт `POST /snooze?reminderId=…`.
-
-## ✅ Практика 18 — Сборка КР3
-Сводный отчёт `practice-18-kr3-final/README.md` с топологией и чек-листом проверки всего PWA-стека.
-
----
-
-# 🟠 КР4 (практики 19–23) — Серверная инфраструктура
-
-| Папка | Что внутри | Результат |
-|---|---|---|
-| `practice-19-postgres` | Express + pg + PostgreSQL | CRUD `Car` (brand/model/year/price/vin), индексы, валидация |
-| `practice-20-mongodb` | Express + mongoose + MongoDB | CRUD `Car` + агрегация `$avg` цены по бренду |
-| `practice-21-redis-cache` | RBAC + JWT + Redis | Кэш для `GET /api/cars` (10 мин) и `/api/users` (1 мин) + инвалидация |
-| `practice-22-load-balancing` | Nginx + HAProxy | 3 backend × Round Robin × max_fails/fail_timeout × backup |
-| `practice-23-docker` | Docker Compose | 3 backend-контейнера + Nginx, изолированная сеть `cars-net` |
-| `practice-24-kr4-final` | **Финальный README КР4** | Итог по всему серверному стеку |
-
-## ✅ Практика 19 — PostgreSQL
-Таблица `cars` с `SERIAL PK`, `CHECK`-ограничениями, индексами по `brand` и `year`. Все 5 CRUD-маршрутов через параметризованные запросы `pg.Pool`. Уникальность `vin` обрабатывается отдельно (код ошибки `23505` → 409).
-
-## ✅ Практика 20 — MongoDB
-Mongoose-схема `Car` с `timestamps: true`, индексами и `unique sparse` для VIN. Бонус: `GET /api/cars-stats/avg-price` через `Car.aggregate` с `$group` и `$avg`.
-
-## ✅ Практика 21 — Redis-кэш
-`cacheMiddleware(keyBuilder, ttl)` сначала смотрит в Redis, иначе передаёт управление дальше и сохраняет ответ через `saveToCache`. Ответ всегда `{ source: 'cache' | 'server', data }` — видно, откуда пришли данные. При `POST/PUT/DELETE` вызываются `invalidateUsersCache` / `invalidateCarsCache`.
-
-## ✅ Практика 22 — Балансировка Nginx + HAProxy
-Три identical backend-инстанса на портах 3001/3002/3003. Nginx (`upstream` + `max_fails=2 fail_timeout=30s` + `backup`) на 8080, HAProxy (`option httpchk GET /health`) на 8090. Скрипты `start-backends.ps1` / `start-backends.sh`.
-
-## ✅ Практика 23 — Docker Compose
-`Dockerfile` на `node:18-alpine` с раздельным `COPY package*.json` для кэширования слоёв. `docker-compose.yml` поднимает три backend-сервиса и Nginx, наружу торчит только `8080:80`. Балансировка идёт по DNS-именам сервисов (`cars-backend-1`, `cars-backend-2`, `cars-backend-3`).
-
-## ✅ Практика 24 — Сборка КР4
-Сводный отчёт `practice-24-kr4-final/README.md`: общая архитектура, маршрут запроса от клиента до БД, чек-лист готовности.
-
----
-
-# 🟢 Практика 25 — Инструменты сборки (Vite + Lazy Loading)
-
-`practice-25-vite/` — React-приложение «Cars Catalog» с настроенным Vite. Главная страница в основном бандле, `Catalog` и `About` — отдельные чанки через `React.lazy + Suspense`. Ручные чанки `react-vendor` и `router` в `vite.config.js`. Анализатор `rollup-plugin-visualizer` генерирует `dist/bundle-report.html`.
-
-```bash
-cd practice-25-vite
-npm install
-npm run dev          # http://localhost:5173
-npm run build        # production-сборка + bundle-report.html
-```
-
----
-
-## 🚀 Быстрый старт КР3 / КР4 / практика 25
-
-```bash
-# КР3 — самое полное приложение (WebSocket + push + напоминания)
+# КР3 — практика 17 (самое полное PWA: WebSocket + push + напоминания)
 cd practice-17-push-reminders
 npm install
-npx web-push generate-vapid-keys     # вставить ключи в server.js
+npx web-push generate-vapid-keys     # подставить в server.js
 npm start                            # http://localhost:3001
 
-# КР4 — поднять весь стек в Docker
-cd practice-23-docker
+# КР4 — практика 24 (весь стек одной командой: PG + Redis + 3 backend + Nginx)
+cd practice-24-kr4-final
 docker compose up --build            # http://localhost:8080
+# Логин: admin@cars.local / admin123 (создаётся автоматически)
 
-# Практика 25 — React-каталог с lazy loading
+# Практика 25 — React-каталог с Vite, lazy loading и bundle analyzer
 cd practice-25-vite
-npm install && npm run dev           # http://localhost:5173
+npm install
+npm run dev                          # http://localhost:5173
+npm run build                        # → dist/bundle-report.html
 ```
