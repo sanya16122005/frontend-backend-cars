@@ -6,17 +6,28 @@ const bodyParser = require('body-parser');
 const socketIo   = require('socket.io');
 const webpush    = require('web-push');
 
-// ───── VAPID-ключи (сгенерируйте свои через `npm run vapid`) ────────
-const vapidKeys = {
-  publicKey:  process.env.VAPID_PUBLIC  || 'BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E',
-  privateKey: process.env.VAPID_PRIVATE || 'CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid'
-};
-
-webpush.setVapidDetails(
-  'mailto:cars-tasks@example.com',
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+// ───── VAPID-ключи ─────────────────────────────────────────────────
+// Если в .env переданы валидные ключи — используем их,
+// иначе генерируем пару на лету, чтобы push работал «из коробки».
+let vapidKeys;
+let pushEnabled = false;
+try {
+  const envPub  = process.env.VAPID_PUBLIC;
+  const envPriv = process.env.VAPID_PRIVATE;
+  if (envPub && envPriv && !envPriv.startsWith('CHANGE_ME')) {
+    vapidKeys = { publicKey: envPub, privateKey: envPriv };
+  } else {
+    vapidKeys = webpush.generateVAPIDKeys();
+    console.log('🔑 Сгенерированы временные VAPID-ключи. Для постоянных:');
+    console.log(`   VAPID_PUBLIC=${vapidKeys.publicKey}`);
+    console.log(`   VAPID_PRIVATE=${vapidKeys.privateKey}`);
+  }
+  webpush.setVapidDetails('mailto:cars-tasks@example.com', vapidKeys.publicKey, vapidKeys.privateKey);
+  pushEnabled = true;
+} catch (err) {
+  console.error('⚠️  VAPID setup failed, push отключён:', err.message);
+  vapidKeys = { publicKey: '', privateKey: '' };
+}
 
 // ───── Express + Socket.IO ──────────────────────────────────────────
 const app = express();
@@ -48,11 +59,13 @@ io.on('connection', (socket) => {
       body:  task.text
     });
 
-    subscriptions.forEach(sub => {
-      webpush.sendNotification(sub, payload).catch(err => {
-        console.error('Push error:', err.statusCode || err.message);
+    if (pushEnabled) {
+      subscriptions.forEach(sub => {
+        webpush.sendNotification(sub, payload).catch(err => {
+          console.error('Push error:', err.statusCode || err.message);
+        });
       });
-    });
+    }
   });
 
   socket.on('disconnect', () => {

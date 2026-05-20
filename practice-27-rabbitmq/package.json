@@ -1,0 +1,16 @@
+{
+  "name": "practice-27-rabbitmq",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RabbitMQ: Producer (Express API) + Worker (Consumer) + Retry + DLQ",
+  "main": "producer.js",
+  "scripts": {
+    "setup":    "node setup-queues.js",
+    "producer": "node producer.js",
+    "worker":   "node worker.js"
+  },
+  "dependencies": {
+    "amqplib":  "^0.10.4",
+    "express":  "^4.19.2"
+  }
+}

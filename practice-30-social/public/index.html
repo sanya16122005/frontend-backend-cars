@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>💬 Social — мини-социальная сеть</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>💬 Social — лента</h1>
+    <div class="user">
+      Я: <input id="me" value="user1" />
+    </div>
+  </header>
+
+  <form id="new-post">
+    <textarea id="text" placeholder="Что у вас нового?" maxlength="500" required></textarea>
+    <button type="submit">Опубликовать</button>
+  </form>
+
+  <main id="feed"></main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

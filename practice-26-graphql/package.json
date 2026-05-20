@@ -1,0 +1,15 @@
+{
+  "name": "practice-26-graphql",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GraphQL + Apollo Server — каталог книг (Book + Author)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.10.4",
+    "graphql": "^16.9.0"
+  }
+}

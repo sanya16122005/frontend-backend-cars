@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- SEO -->
+  <title>Cars Academy — онлайн-курс по веб-разработке</title>
+  <meta name="description" content="Cars Academy — практический курс по фронтенду и бэкенду: React, Node.js, PostgreSQL, Docker. Учитесь, создавая полноценное веб-приложение." />
+  <link rel="canonical" href="https://cars-academy.example.com/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Cars Academy — онлайн-курс по веб-разработке" />
+  <meta property="og:description" content="React, Node.js, PostgreSQL, Docker — собери полноценное приложение." />
+  <meta property="og:image" content="/icons/android-chrome-512x512.png" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0b0f19" />
+  <link rel="icon" href="/icons/favicon-32x32.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <nav class="nav">
+      <div class="nav__brand">🚗 Cars Academy</div>
+      <a href="#features"  class="nav__link">Программа</a>
+      <a href="#prices"    class="nav__link">Цены</a>
+      <a href="#contact"   class="nav__link">Контакты</a>
+    </nav>
+
+    <div class="hero__content">
+      <h1>Стань fullstack-разработчиком за&nbsp;4 месяца</h1>
+      <p>React, Node.js, PostgreSQL, Docker, PWA. Курс с реальными проектами: пишешь магазин, чат, PWA, разворачиваешь в Docker.</p>
+      <a href="#prices" class="btn btn--primary">Записаться</a>
+    </div>
+  </header>
+
+  <section id="features" class="section">
+    <h2>Что вы научитесь делать</h2>
+    <div class="grid">
+      <article class="card"><h3>🎨 Frontend</h3><p>HTML, CSS, JavaScript, React, Vite, Sass — современный стек.</p></article>
+      <article class="card"><h3>⚙️ Backend</h3><p>Express, REST, GraphQL, JWT, RBAC, Swagger-документация.</p></article>
+      <article class="card"><h3>🗄️ БД и кэш</h3><p>PostgreSQL, MongoDB, Redis, миграции, индексы, агрегации.</p></article>
+      <article class="card"><h3>📦 DevOps</h3><p>Docker Compose, Nginx-балансировка, CI/CD, развёртывание.</p></article>
+    </div>
+  </section>
+
+  <section id="prices" class="section section--alt">
+    <h2>Тарифы</h2>
+    <div class="grid">
+      <article class="card price">
+        <h3>Старт</h3>
+        <p class="price__num">12 000 ₽</p>
+        <ul><li>Доступ к видео</li><li>Чат с менторами</li><li>Сертификат</li></ul>
+      </article>
+      <article class="card price price--accent">
+        <h3>Стандарт</h3>
+        <p class="price__num">24 000 ₽</p>
+        <ul><li>Всё из «Старт»</li><li>Ревью кода</li><li>3 групповых проекта</li></ul>
+      </article>
+      <article class="card price">
+        <h3>Pro</h3>
+        <p class="price__num">48 000 ₽</p>
+        <ul><li>Всё из «Стандарт»</li><li>Личный ментор</li><li>Помощь с трудоустройством</li></ul>
+      </article>
+    </div>
+  </section>
+
+  <footer id="contact" class="footer">
+    <p>📧 hello@cars-academy.example.com</p>
+    <p>© 2026 Cars Academy</p>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

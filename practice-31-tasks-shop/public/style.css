@@ -1,0 +1,56 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #0b0f19;
+  color: #e5e7eb;
+  font-family: system-ui, sans-serif;
+  padding: 24px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto 24px;
+}
+.header h1 { margin: 0; flex: 1; }
+#new-task { display: flex; gap: 8px; }
+#new-task input {
+  background: #1f2937; color: #fff; border: 1px solid #374151;
+  border-radius: 8px; padding: 8px 12px; min-width: 240px;
+}
+#new-task button, .task button {
+  background: #818cf8; color: #0b0f19; border: 0;
+  border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 600;
+}
+
+.board {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.col {
+  background: #111827;
+  border-radius: 14px;
+  padding: 16px;
+  min-height: 200px;
+  transition: outline .15s;
+}
+.col h2 { margin: 0 0 12px; font-size: 16px; }
+.col__list { display: grid; gap: 8px; min-height: 100px; }
+.col.over { outline: 2px dashed #818cf8; }
+
+.task {
+  background: #1f2937;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task.dragging { opacity: .4; }
+.task__title { flex: 1; word-break: break-word; }
+.task button { background: #ef4444; padding: 4px 8px; font-size: 12px; }

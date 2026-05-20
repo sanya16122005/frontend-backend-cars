@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>📝 Kanban Board</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>📝 Kanban</h1>
+    <form id="new-task">
+      <input id="title" placeholder="Новая задача…" maxlength="120" required />
+      <button>+ Добавить</button>
+    </form>
+  </header>
+
+  <main class="board">
+    <section class="col" data-status="todo">
+      <h2>📥 К выполнению</h2>
+      <div class="col__list"></div>
+    </section>
+    <section class="col" data-status="in-progress">
+      <h2>⚙️ В работе</h2>
+      <div class="col__list"></div>
+    </section>
+    <section class="col" data-status="done">
+      <h2>✅ Готово</h2>
+      <div class="col__list"></div>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

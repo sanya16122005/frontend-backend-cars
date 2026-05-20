@@ -8,6 +8,7 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 
 const { pool } = require('./db');
 const { connectRedis, pubClient, subClient } = require('./redis');
+const { initPush } = require('./push');
 const swaggerSpec = require('./swagger');
 
 const authRoutes  = require('./routes/auth');
@@ -76,6 +77,7 @@ function getIo() { return io; }
   try {
     await waitForPg();
     await connectRedis();
+    await initPush();
 
     const server = http.createServer(app);
     io = new SocketIOServer(server, {

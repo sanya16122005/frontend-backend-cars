@@ -1,0 +1,15 @@
+{
+  "name": "practice-30-social",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Мини-социальная сеть: посты, лайки, комментарии, real-time через Socket.IO",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express":   "^4.19.2",
+    "socket.io": "^4.7.5",
+    "nanoid":    "^3.3.7"
+  }
+}

@@ -1,4 +1,4 @@
-# 🚗 Frontend & Backend — Cars (Практики 1–25)
+# 🚗 Frontend & Backend — Cars (Практики 1–32)
 
 Репозиторий с практическими заданиями по дисциплине **«Фронтенд и бэкенд разработка»**  
 Институт ИПТИП, кафедра Индустриального программирования, 4 семестр 2025/2026.  
@@ -37,6 +37,13 @@
 | `practice-23-docker` | Docker Compose | Стек cars-backend × 3 + Nginx |
 | `practice-24-kr4-final` | **Финальный отчёт КР4** | Сводный README по серверному стеку |
 | `practice-25-vite` | Vite + React.lazy + visualizer | Code splitting, ручные чанки, bundle report |
+| `practice-26-graphql` | Apollo Server + GraphQL | Каталог книг: Book/Author, Query/Mutation, вложенные резолверы |
+| `practice-27-rabbitmq` | RabbitMQ + amqplib | Producer + Worker + Retry (exp. backoff) + Dead Letter Queue |
+| `practice-28-kr5-final` | **Подготовка к КР5** | Спецификация итогового проекта + 6 вариантов |
+| `practice-29-landing` | PWA-лендинг | Service Worker, SEO, манифест, Lighthouse > 90 |
+| `practice-30-social` | Express + Socket.IO | Мини-социальная сеть: посты, лайки, комментарии, real-time |
+| `practice-31-tasks-shop` | Kanban-доска + DnD | 3 колонки, drag-n-drop, real-time через Socket.IO |
+| `practice-32-ai` | AI-чат + RAG | SSE-стрим (mock или OpenAI), поиск по загруженным документам |
 
 ---
 
@@ -2232,6 +2239,283 @@ npm run preview      # локальный просмотр собранной в
 
 ---
 
+# ✅ Практика 26 — GraphQL + Apollo Server
+
+## Цель
+Реализовать GraphQL API для каталога книг: типы `Book` и `Author` со связью «один-ко-многим», запросы (`Query`), мутации (`Mutation`), вложенные резолверы.
+
+## Теория
+
+### GraphQL vs REST
+| Характеристика | REST | GraphQL |
+|---|---|---|
+| Эндпоинты | Множество (`/users`, `/posts`) | Один (`/graphql`) |
+| Структура ответа | Определяет сервер | Определяет клиент |
+| Overfetching | Частая проблема | Отсутствует |
+| Underfetching | Несколько запросов | Один запрос для любых данных |
+| Версионирование | Нужно (`/v1`, `/v2`) | Не требуется |
+
+Клиент сам описывает, какие именно поля ему нужны:
+```graphql
+{ user(id: 42) { name avatar posts { title } } }
+```
+
+### Схема и резолверы
+Схема (SDL) описывает все типы и операции. Резолвер — функция, возвращающая значение поля:
+```js
+fieldName: (parent, args, context, info) => { ... }
+```
+- `parent` — результат резолвера родительского поля
+- `args` — аргументы из запроса
+- `context` — общий объект запроса (БД, текущий пользователь)
+
+## Что реализовано
+- `type Author { id, name, country, books: [Book!]! }`
+- `type Book { id, title, year, genre, author: Author! }`
+- Query: `books`, `book(id)`, `authors`, `author(id)`, `booksByGenre(genre)`
+- Mutation: `createAuthor`, `createBook`, `deleteBook`
+- Вложенные резолверы: `Author.books` и `Book.author`
+- Демо-данные: 3 автора + 5 книг (Достоевский, Оруэлл, Маркес)
+
+## Как запустить
+```bash
+cd practice-26-graphql
+npm install
+npm start
+```
+Apollo Sandbox: **http://localhost:4000**
+
+## Пример запроса
+```graphql
+query {
+  authors {
+    name
+    books { title year }
+  }
+}
+```
+
+---
+
+# ✅ Практика 27 — Брокеры сообщений (RabbitMQ)
+
+## Цель
+Реализовать систему асинхронной обработки задач: Express-API кладёт задачи в очередь, несколько воркеров параллельно их обрабатывают, при ошибке — экспоненциальный retry, после исчерпания попыток — Dead Letter Queue.
+
+## Теория
+
+### Паттерн Message Queue
+Producer публикует сообщение в **Exchange**, который маршрутизирует его в **Queue** по правилам. Consumer забирает сообщение, обрабатывает и подтверждает (`ack`) или отклоняет (`nack`).
+
+Преимущества:
+- Асинхронность — отправитель не ждёт ответа
+- Буферизация нагрузки — пики трафика поглощает очередь
+- Надёжность — упавший Consumer не теряет сообщения
+- Слабая связанность — сервисы знают только о брокере
+
+### Retry + DLQ
+- В заголовке `x-retry-count` хранится номер попытки.
+- При ошибке worker `ack`-ает и **перепубликует** копию с увеличенным счётчиком после паузы `min(1000 * 2^n, 30000) + jitter`.
+- После 3 неудач — `nack(requeue=false)`, и через DLX сообщение уходит в `tasks_dlq` для ручного разбора.
+
+## Что реализовано
+| Файл | Назначение |
+|---|---|
+| `setup-queues.js` | Создаёт `tasks_queue`, `tasks_dlx`, `tasks_dlq` |
+| `producer.js`     | Express API с `POST /tasks` |
+| `worker.js`       | Consumer с prefetch(1), retry и DLQ |
+
+### Имитация ошибок
+Worker «случайно» валит ~60% задач с `type: "email"`, чтобы было видно retry и доставку в DLQ.
+
+## Как запустить
+```bash
+# 1) RabbitMQ
+docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+
+# 2) Очереди
+cd practice-27-rabbitmq
+npm install
+npm run setup
+
+# 3) Воркеры (в разных терминалах)
+WORKER_ID=1 npm run worker
+WORKER_ID=2 npm run worker
+
+# 4) Producer
+npm run producer
+
+# 5) Отправить задачу
+curl -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"type":"email","payload":{"to":"u@u","subject":"Hi"}}'
+```
+Web-UI RabbitMQ: **http://localhost:15672** (guest / guest).
+
+---
+
+# ⭐ Практика 28 — Подготовка к КР5 (итоговый проект)
+
+## Цель
+Спроектировать **итоговый веб-проект**, объединяющий все навыки курса.
+
+## Общие требования
+| Требование | Описание |
+|---|---|
+| **Backend** | Express + БД (SQL или NoSQL) |
+| **Frontend** | React или Vue SPA |
+| **Авторизация** | JWT + RBAC |
+| **Контейнеризация** | `docker-compose.yml` — одной командой |
+| **Тесты** | Coverage ≥ 50 % |
+| **Документация** | `README.md` + `.env.example` |
+
+## Шесть вариантов проекта
+| № | Вариант | Демо в этом репо |
+|---|---|---|
+| 1 | Лендинг (PWA + SEO) | [`practice-29-landing/`](practice-29-landing/) |
+| 2 | Социальная сеть (real-time) | [`practice-30-social/`](practice-30-social/) |
+| 3 | E-commerce (Stripe + инвентарь) | каркас `practice-31-tasks-shop/` |
+| 4 | Мессенджер (E2E + offline) | база — `practice-16-websocket-push/` |
+| 5 | Менеджер задач (Kanban + collab) | [`practice-31-tasks-shop/`](practice-31-tasks-shop/) |
+| 6 | AI-интеграция (OpenAI + RAG) | [`practice-32-ai/`](practice-32-ai/) |
+
+Подробный чек-лист и шаблон README — внутри [`practice-28-kr5-final/README.md`](practice-28-kr5-final/README.md).
+
+> 💡 За основу финального проекта удобно взять `practice-24-kr4-final/` — там уже есть React + Express + JWT + RBAC + PostgreSQL + Redis + Docker. Заменяешь модель `Car` на свою сущность и допиливаешь специфику варианта.
+
+---
+
+# ✅ Практика 29 — Лендинг (PWA + SEO)
+
+## Цель
+Сделать адаптивный лендинг-PWA с высоким Lighthouse-баллом, SEO-разметкой и работой без сети.
+
+## Что реализовано
+- Адаптивная вёрстка (mobile-first, `clamp`, `auto-fit`)
+- SEO: `<title>`, `<meta description>`, canonical, Open Graph
+- PWA: `manifest.json`, Service Worker (Cache First), иконки 192/512
+- Offline-режим: после первой загрузки страница работает без интернета
+- Плавная прокрутка к якорям
+
+## Как запустить
+```bash
+cd practice-29-landing
+mkdir icons && cp ../practice-17-push-reminders/icons/* icons/
+npx serve .                          # http://localhost:3000
+```
+
+## Lighthouse
+DevTools → Lighthouse → Mobile → Run audit. Цель — все категории > 90.
+
+---
+
+# ✅ Практика 30 — Социальная сеть (real-time)
+
+## Цель
+Сделать мини-социальную ленту: посты, лайки, комментарии. Все изменения мгновенно прилетают во все открытые вкладки через Socket.IO.
+
+## Что реализовано
+### Сервер (Express + Socket.IO)
+| Метод | Путь | Описание |
+|---|---|---|
+| GET  | `/api/posts`              | Лента (свежие сверху) |
+| POST | `/api/posts`              | Создать пост |
+| POST | `/api/posts/:id/like`     | Лайк / снять лайк |
+| POST | `/api/posts/:id/comments` | Добавить комментарий |
+
+### Socket.IO события
+- `post:created` — новый пост в ленте
+- `post:liked` — изменился счётчик лайков
+- `post:commented` — новый комментарий
+
+### Клиент (ванильный JS)
+- Поле «Я: …» — текущий пользователь
+- Карточка поста: автор, дата, текст, ❤ счётчик, список комментариев, форма
+
+## Как запустить
+```bash
+cd practice-30-social
+npm install
+npm start                            # http://localhost:3000
+```
+
+Открыть в **двух вкладках** — все изменения синхронизируются мгновенно.
+
+---
+
+# ✅ Практика 31 — Менеджер задач (Kanban + real-time)
+
+## Цель
+Сделать Kanban-доску с тремя колонками («📥 К выполнению» / «⚙️ В работе» / «✅ Готово»), drag-and-drop задач между колонками и real-time синхронизацией между всеми клиентами.
+
+> Этот же каркас подходит для **варианта 3 КР5 (E-commerce)** — заменить задачи на товары, колонки на «Каталог / Корзина / Оплачено».
+
+## Что реализовано
+### Сервер
+| Метод | Путь | Описание |
+|---|---|---|
+| GET    | `/api/board`    | Все задачи |
+| POST   | `/api/tasks`    | Создать `{ title, status? }` |
+| PATCH  | `/api/tasks/:id`| Обновить (`status` при DnD) |
+| DELETE | `/api/tasks/:id`| Удалить |
+
+### Socket.IO события
+- `task:created`, `task:updated`, `task:deleted` — broadcast всем
+
+### Клиент
+- Нативный HTML5 DnD (`draggable`, `dragstart`, `dragover`, `drop`)
+- Оптимистичное обновление: задача мгновенно «прыгает» в новую колонку
+- Все вкладки синхронизируются
+
+## Как запустить
+```bash
+cd practice-31-tasks-shop
+npm install
+npm start                            # http://localhost:3000
+```
+
+Открыть в двух вкладках — перетащи задачу в одной, во второй она тоже переедет.
+
+---
+
+# ✅ Практика 32 — AI-интеграция (потоковый чат + RAG)
+
+## Цель
+Сделать чат-приложение с потоковым ответом (SSE) и поиском по загруженным документам (мини-RAG).
+
+## Что реализовано
+### Сервер
+| Метод | Путь | Описание |
+|---|---|---|
+| POST   | `/api/chat`              | SSE-стрим (`{ conversationId, message }`) |
+| GET    | `/api/conversations/:id` | История диалога |
+| POST   | `/api/documents`         | Загрузить документ для RAG |
+| GET    | `/api/documents`         | Список загруженных документов |
+| DELETE | `/api/documents/:id`     | Удалить документ |
+
+### Два режима
+- **Без `OPENAI_API_KEY`** — встроенный mock: стримит ответ по словам, узнаёт темы и подмешивает фрагменты из документов.
+- **С `OPENAI_API_KEY`** — реальные потоковые ответы OpenAI Chat Completions.
+
+### Мини-RAG
+Наивный поиск по ключевым словам в загруженных документах. В реальном проекте → **pgvector** + эмбеддинги (`text-embedding-3-small`).
+
+### Клиент
+- Чат-интерфейс с пузырями user / assistant / context
+- SSE-парсер событий (`data:`, `event: meta`, `event: done`)
+- Загрузка `.txt`/`.md` для RAG
+
+## Как запустить
+```bash
+cd practice-32-ai
+npm install
+npm start                            # mock-режим
+OPENAI_API_KEY=sk-... npm start      # реальный OpenAI
+```
+**http://localhost:3000** — спросить про GraphQL, JWT, Docker и т.п.
+
+---
+
 ## 🚀 Быстрый старт (все КР)
 
 ```bash
@@ -2244,9 +2528,9 @@ cd practice-12-final/server && npm install && npm start
 cd practice-12-final/client && npm install && npm start
 
 # КР3 — практика 17 (самое полное PWA: WebSocket + push + напоминания)
+# VAPID-ключи генерируются автоматически на старте, если не заданы в .env
 cd practice-17-push-reminders
 npm install
-npx web-push generate-vapid-keys     # подставить в server.js
 npm start                            # http://localhost:3001
 
 # КР4 — практика 24 (объединение всех 4 КР в один проект)
@@ -2255,10 +2539,28 @@ cd practice-24-kr4-final
 docker compose up --build            # http://localhost:8080
 # Демо-аккаунт: admin@cars.local / admin123 (создаётся автоматически)
 # Swagger: http://localhost:8080/api-docs
+# VAPID-ключи — генерируются на старте и кэшируются в Redis (общие для всех инстансов)
 
 # Практика 25 — React-каталог с Vite, lazy loading и bundle analyzer
 cd practice-25-vite
 npm install
 npm run dev                          # http://localhost:5173
 npm run build                        # → dist/bundle-report.html
+
+# Практика 26 — GraphQL/Apollo Server
+cd practice-26-graphql && npm install && npm start   # Apollo Sandbox: http://localhost:4000
+
+# Практика 27 — RabbitMQ (Producer + Workers + Retry + DLQ)
+docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+cd practice-27-rabbitmq && npm install && npm run setup
+# В разных терминалах:
+WORKER_ID=1 npm run worker
+WORKER_ID=2 npm run worker
+npm run producer                     # API: http://localhost:3000
+
+# КР5 — выбрать вариант из практики 28, демо в 29-32
+cd practice-29-landing  && npx serve .            # PWA-лендинг
+cd practice-30-social   && npm install && npm start   # Социальная сеть
+cd practice-31-tasks-shop && npm install && npm start # Kanban
+cd practice-32-ai       && npm install && npm start   # AI-чат с RAG
 ```

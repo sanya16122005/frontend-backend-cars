@@ -1,0 +1,14 @@
+{
+  "name": "practice-32-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-чат с потоковым ответом (SSE), мини-RAG по локальным документам",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "nanoid":  "^3.3.7"
+  }
+}

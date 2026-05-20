@@ -1,6 +1,6 @@
 const express = require('express');
 const { saveSubscription, removeSubscription } = require('../redis');
-const { PUBLIC_KEY } = require('../push');
+const { getPublicKey, isPushEnabled } = require('../push');
 
 const router = express.Router();
 
@@ -14,7 +14,10 @@ const router = express.Router();
  *       200:
  *         description: Ключ
  */
-router.get('/vapid-public-key', (req, res) => res.json({ key: PUBLIC_KEY }));
+router.get('/vapid-public-key', (req, res) => {
+  if (!isPushEnabled()) return res.status(503).json({ error: 'Push disabled on server' });
+  res.json({ key: getPublicKey() });
+});
 
 /**
  * @swagger

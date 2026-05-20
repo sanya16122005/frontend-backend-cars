@@ -6,12 +6,28 @@ const bodyParser = require('body-parser');
 const socketIo   = require('socket.io');
 const webpush    = require('web-push');
 
-const vapidKeys = {
-  publicKey:  process.env.VAPID_PUBLIC  || 'BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E',
-  privateKey: process.env.VAPID_PRIVATE || 'CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid'
-};
-
-webpush.setVapidDetails('mailto:cars-tasks@example.com', vapidKeys.publicKey, vapidKeys.privateKey);
+// VAPID-ключи. Если в .env переданы валидные ключи — используем их,
+// иначе генерируем рабочую пару на лету, чтобы push работал «из коробки».
+let vapidKeys;
+let pushEnabled = false;
+try {
+  const envPub  = process.env.VAPID_PUBLIC;
+  const envPriv = process.env.VAPID_PRIVATE;
+  if (envPub && envPriv && !envPriv.startsWith('CHANGE_ME')) {
+    vapidKeys = { publicKey: envPub, privateKey: envPriv };
+  } else {
+    vapidKeys = webpush.generateVAPIDKeys();
+    console.log('🔑 Сгенерированы временные VAPID-ключи (живут пока работает процесс).');
+    console.log('   Для постоянных подписок добавьте в .env:');
+    console.log(`   VAPID_PUBLIC=${vapidKeys.publicKey}`);
+    console.log(`   VAPID_PRIVATE=${vapidKeys.privateKey}`);
+  }
+  webpush.setVapidDetails('mailto:cars-tasks@example.com', vapidKeys.publicKey, vapidKeys.privateKey);
+  pushEnabled = true;
+} catch (err) {
+  console.error('⚠️  VAPID setup failed, push отключён:', err.message);
+  vapidKeys = { publicKey: '', privateKey: '' };
+}
 
 const app = express();
 app.use(cors());
@@ -25,6 +41,7 @@ const reminders   = new Map(); // id → { timeoutId, text, reminderTime }
 const SNOOZE_MS   = 5 * 60 * 1000;
 
 function broadcastPush(payload) {
+  if (!pushEnabled) return;
   const body = JSON.stringify(payload);
   subscriptions.forEach(sub => {
     webpush.sendNotification(sub, body).catch(err => console.error('Push error:', err.statusCode || err.message));

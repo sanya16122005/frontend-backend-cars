@@ -59,8 +59,8 @@ services:
       REDIS_URL: redis://redis:6379
       ACCESS_SECRET:  cars_access_secret
       REFRESH_SECRET: cars_refresh_secret
-      VAPID_PUBLIC:  ${VAPID_PUBLIC:-BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E}
-      VAPID_PRIVATE: ${VAPID_PRIVATE:-CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid}
+      VAPID_PUBLIC:  ${VAPID_PUBLIC:-}
+      VAPID_PRIVATE: ${VAPID_PRIVATE:-}
     networks: [cars-net]
 
   cars-backend-2:
@@ -80,8 +80,8 @@ services:
       REDIS_URL: redis://redis:6379
       ACCESS_SECRET:  cars_access_secret
       REFRESH_SECRET: cars_refresh_secret
-      VAPID_PUBLIC:  ${VAPID_PUBLIC:-BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E}
-      VAPID_PRIVATE: ${VAPID_PRIVATE:-CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid}
+      VAPID_PUBLIC:  ${VAPID_PUBLIC:-}
+      VAPID_PRIVATE: ${VAPID_PRIVATE:-}
     networks: [cars-net]
 
   cars-backend-3:
@@ -101,8 +101,8 @@ services:
       REDIS_URL: redis://redis:6379
       ACCESS_SECRET:  cars_access_secret
       REFRESH_SECRET: cars_refresh_secret
-      VAPID_PUBLIC:  ${VAPID_PUBLIC:-BNxRsl7y0n9wWQ8sZK2Q1Xz0WyYC0HwQ8Hh8aE7q3qSxKxRk5q6Xc9Vy2KxJh8Pk9aLn0_RbF8t8sP2gQ4cU0w7E}
-      VAPID_PRIVATE: ${VAPID_PRIVATE:-CHANGE_ME_PRIVATE_KEY_FROM_npm_run_vapid}
+      VAPID_PUBLIC:  ${VAPID_PUBLIC:-}
+      VAPID_PRIVATE: ${VAPID_PRIVATE:-}
     networks: [cars-net]
 
   # Единый Nginx: отдаёт собранный фронт + проксирует /api, /api-docs, /socket.io
