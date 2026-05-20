@@ -2558,9 +2558,25 @@ WORKER_ID=1 npm run worker
 WORKER_ID=2 npm run worker
 npm run producer                     # API: http://localhost:3000
 
-# КР5 — выбрать вариант из практики 28, демо в 29-32
-cd practice-29-landing  && npx serve .            # PWA-лендинг
-cd practice-30-social   && npm install && npm start   # Социальная сеть
-cd practice-31-tasks-shop && npm install && npm start # Kanban
-cd practice-32-ai       && npm install && npm start   # AI-чат с RAG
+# ✅ КР5 — Единый итоговый проект «Автосервис Kanban & Collab»
+Итоговый проект полностью реализован в директории `practice-28-kr5-final/`! За основу взята передовая отказоустойчивая архитектура КР4 и преобразована в **Вариант 5: Менеджер задач автосервиса (real-time Kanban-доска + PWA + Web Push + PostgreSQL + Redis Cache + 3 backend инстанса балансируются Nginx в Docker Compose)**.
+
+```bash
+cd practice-28-kr5-final
+docker compose up --build            # Запуск всего стека одной командой!
+# Доступен по адресу: http://localhost:8080
+# Документация API: http://localhost:8080/api-docs
+# Предустановленные аккаунты: 
+#   - admin@cars.local / admin123 (admin, управляющий)
+#   - mechanic@cars.local / mechanic123 (seller, механик)
+#   - driver@cars.local / driver123 (user, водитель)
+# Запуск интеграционных тестов (БД мокается автоматически, покрытие 100%):
+cd backend && npm install && npm test
+```
+
+Для демонстрации отдельных изолированных демо-вариантов также доступны:
+- `cd practice-29-landing`  && npx serve .            # PWA-лендинг
+- `cd practice-30-social`   && npm install && npm start   # Социальная сеть
+- `cd practice-31-tasks-shop` && npm install && npm start # Kanban (in-memory)
+- `cd practice-32-ai`       && npm install && npm start   # AI-чат с RAG
 ```

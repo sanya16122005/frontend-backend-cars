@@ -1,0 +1,33 @@
+@use 'variables' as *;
+
+@mixin button-base {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: $text;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s, border-color 0.15s;
+  &:hover { background: rgba(255, 255, 255, 0.04); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+@mixin panel {
+  padding: 16px;
+  border-radius: $radius;
+  border: 1px solid $border;
+  background: $panel;
+}
+
+@mixin input-base {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: $radius;
+  border: 1px solid $border;
+  background: rgba(255, 255, 255, 0.04);
+  color: $text;
+  font-size: 14px;
+  outline: none;
+  &:focus { border-color: $primary; }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "cars-backend-kr4",
+  "version": "1.0.0",
+  "description": "Unified KR4 backend: Express + JWT + RBAC + PostgreSQL + Redis + Socket.IO + web-push + Swagger",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "init-db": "node src/init-db.js",
+    "vapid": "web-push generate-vapid-keys",
+    "test": "node src/test.js"
+  },
+  "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^3.3.7",
+    "pg": "^8.12.0",
+    "redis": "^4.7.0",
+    "socket.io": "^4.7.5",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "web-push": "^3.6.7"
+  }
+}

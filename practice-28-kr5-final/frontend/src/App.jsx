@@ -7,7 +7,7 @@ import { useToasts, ToastHost } from './hooks/useToasts.jsx';
 
 import LoginPage    from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
-import CarsPage     from './pages/CarsPage.jsx';
+import KanbanPage   from './pages/KanbanPage.jsx';
 import UsersPage    from './pages/UsersPage.jsx';
 
 import PrivateRoute from './components/PrivateRoute.jsx';
@@ -18,14 +18,21 @@ export default function App() {
   const navigate = useNavigate();
   const { toasts, push } = useToasts();
 
-  // Socket.IO для real-time toast'ов между вкладками
+  // Socket.IO для real-time событий между вкладками и инстансами
   useEffect(() => {
     if (!auth.user) return;
+    
     const socket = io({ path: '/socket.io' });
-    socket.on('carCreated', (car) => push(`🆕 Добавлено: ${car.brand} ${car.model}`));
-    socket.on('carUpdated', (car) => push(`✏️ Обновлено: ${car.brand} ${car.model}`));
-    socket.on('carDeleted', (data) => push(`🗑️ Удалено #${data.id}`));
-    return () => socket.disconnect();
+    window.socket = socket; // Экспортируем в окно для доступа из KanbanPage
+
+    socket.on('taskCreated', (task) => push(`🆕 Добавлена задача: "${task.title}" (для ${task.car_model})`));
+    socket.on('taskUpdated', (task) => push(`✏️ Обновлена задача: "${task.title}" (статус: ${task.status})`));
+    socket.on('taskDeleted', (data) => push(`🗑️ Задача #${data.id} удалена`));
+    
+    return () => {
+      socket.disconnect();
+      window.socket = null;
+    };
   }, [auth.user, push]);
 
   function logout() { auth.logout(); navigate('/login', { replace: true }); }
@@ -33,16 +40,16 @@ export default function App() {
   return (
     <>
       <header className="header">
-        <div className="header__brand">🚗 Cars — итоговый проект</div>
+        <div className="header__brand">🚗 Автосервис — Kanban & Collab (КР5)</div>
 
         <nav className="header__nav">
           {auth.user && (
             <>
-              <NavLink to="/cars"  className={({isActive}) => isActive ? 'header__link active' : 'header__link'}>Каталог</NavLink>
+              <NavLink to="/kanban"  className={({isActive}) => isActive ? 'header__link active' : 'header__link'}>Kanban-доска</NavLink>
               {auth.role === 'admin' && (
                 <NavLink to="/users" className={({isActive}) => isActive ? 'header__link active' : 'header__link'}>Пользователи</NavLink>
               )}
-              <a className="header__link" href="/api-docs" target="_blank" rel="noreferrer">Swagger</a>
+              <a className="header__link" href="/api-docs" target="_blank" rel="noreferrer">Swagger API</a>
               <PushToggle />
               <span className="header__user">{auth.user.email} · <strong>{auth.user.role}</strong></span>
               <button className="btn" onClick={logout}>Выйти</button>
@@ -58,13 +65,13 @@ export default function App() {
       </header>
 
       <Routes>
-        <Route path="/"         element={<Navigate to={auth.user ? '/cars' : '/login'} replace />} />
+        <Route path="/"         element={<Navigate to={auth.user ? '/kanban' : '/login'} replace />} />
         <Route path="/login"    element={<LoginPage    auth={auth} />} />
         <Route path="/register" element={<RegisterPage auth={auth} />} />
 
-        <Route path="/cars"  element={
+        <Route path="/kanban"  element={
           <PrivateRoute user={auth.user} roles={['user','seller','admin']}>
-            <CarsPage role={auth.role} pushToast={push} />
+            <KanbanPage role={auth.role} pushToast={push} />
           </PrivateRoute>
         } />
         <Route path="/users" element={
@@ -77,10 +84,11 @@ export default function App() {
       </Routes>
 
       <footer className="footer">
-        🚗 Cars — итог КР1+КР2+КР3+КР4: React UI · JWT+RBAC · Swagger · PWA · Push · PostgreSQL · Redis · Nginx LB · Docker
+        🚗 Автосервис — Финальный проект КР5 (на базе КР1-КР4): Kanban Board · WebSockets Collab · PWA · Web Push · PostgreSQL · Redis · Nginx Balance · Docker Compose
       </footer>
 
       <ToastHost toasts={toasts} />
     </>
   );
 }
+
